@@ -11,8 +11,6 @@ const fastify = require('fastify')({
   },
 });
 
-const { initSchema } = require('./lib/schema');
-
 // Register Routes
 fastify.register(require('./routes/auth.routes'));
 fastify.register(require('./routes/otp.routes'));
@@ -28,7 +26,6 @@ fastify.get('/', async () => {
 
 const start = async () => {
   try {
-    await initSchema();
     await fastify.listen({ port: process.env.PORT || 3000, host: '0.0.0.0' });
     console.log(`🚀 wazOTP server running at http://localhost:${process.env.PORT || 3000}`);
   } catch (err) {

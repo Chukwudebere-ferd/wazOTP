@@ -10,8 +10,7 @@ try {
   });
   console.log('🔥 Firebase Admin initialized');
 } catch (error) {
-  console.warn('⚠️ Firebase Admin could not be initialized. Please ensure firebase-service-account.json exists.');
-  // We don't exit the process here so the server can still run in "dev" mode if needed
+  console.warn('⚠️ Firebase Admin could not be initialized:', error.message);
 }
 
 module.exports = admin;

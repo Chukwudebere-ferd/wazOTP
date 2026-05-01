@@ -1,85 +1,90 @@
 const crypto = require('crypto');
-const { query } = require('../lib/db');
 const admin = require('../lib/firebase');
 
 class AuthService {
+  constructor() {
+    this.db = admin.firestore();
+    this.usersColl = this.db.collection('users');
+    this.apiKeysColl = this.db.collection('api_keys');
+  }
+
   /**
-   * Links a Firebase user to our internal DB and generates an API key
-   * @param {string} firebaseUid 
-   * @param {string} email 
+   * Links a Firebase user to our Firestore DB and generates an API key
    */
   async linkFirebaseUser(firebaseUid, email) {
     // 1. Check if user already exists
-    let userResult = await query(
-      'SELECT id, email FROM users WHERE firebase_uid = $1',
-      [firebaseUid]
-    );
-
-    let user;
-    if (userResult.rows.length === 0) {
-      // 2. Create User if doesn't exist
-      userResult = await query(
-        'INSERT INTO users (firebase_uid, email) VALUES ($1, $2) RETURNING id, email',
-        [firebaseUid, email]
-      );
-    }
+    const userSnapshot = await this.usersColl.where('firebase_uid', '==', firebaseUid).limit(1).get();
     
-    user = userResult.rows[0];
+    let userDoc;
+    if (userSnapshot.empty) {
+      // 2. Create User if doesn't exist
+      userDoc = await this.usersColl.add({
+        firebase_uid: firebaseUid,
+        email: email,
+        created_at: admin.firestore.FieldValue.serverTimestamp()
+      });
+    } else {
+      userDoc = userSnapshot.docs[0].ref;
+    }
 
-    // 3. Check if user already has an API key
-    const keyResult = await query(
-      'SELECT key FROM api_keys WHERE user_id = $1 AND status = $2',
-      [user.id, 'active']
-    );
+    const userId = userDoc.id;
+
+    // 3. Check if user already has an active API key
+    const keySnapshot = await this.apiKeysColl
+      .where('user_id', '==', userId)
+      .where('status', '==', 'active')
+      .limit(1)
+      .get();
 
     let apiKey;
-    if (keyResult.rows.length === 0) {
-      apiKey = await this.generateApiKey(user.id);
+    if (keySnapshot.empty) {
+      apiKey = await this.generateApiKey(userId);
     } else {
-      apiKey = keyResult.rows[0].key;
+      apiKey = keySnapshot.docs[0].data().key;
     }
 
-    return { user, apiKey };
+    return { user: { id: userId, email }, apiKey };
   }
 
   /**
    * Generates a new API key for a user
-   * @param {number} userId 
    */
   async generateApiKey(userId) {
     const key = 'sk_live_' + crypto.randomBytes(24).toString("hex");
     
-    await query(
-      'INSERT INTO api_keys (user_id, key) VALUES ($1, $2)',
-      [userId, key]
-    );
+    await this.apiKeysColl.add({
+      user_id: userId,
+      key: key,
+      status: 'active',
+      created_at: admin.firestore.FieldValue.serverTimestamp()
+    });
 
     return key;
   }
 
   /**
-   * Validates an API key against the database
-   * @param {string} key 
+   * Validates an API key against Firestore
    */
   async validateApiKey(key) {
-    const result = await query(
-      'SELECT user_id FROM api_keys WHERE key = $1 AND status = $2',
-      [key, 'active']
-    );
+    const snapshot = await this.apiKeysColl
+      .where('key', '==', key)
+      .where('status', '==', 'active')
+      .limit(1)
+      .get();
 
-    return result.rows[0] ? result.rows[0].user_id : null;
+    if (snapshot.empty) return null;
+    return snapshot.docs[0].data().user_id;
   }
 
   /**
-   * Verifies a Firebase ID Token (for Dashboard use)
-   * @param {string} idToken 
+   * Verifies a Firebase ID Token
    */
   async verifyFirebaseToken(idToken) {
     try {
       const decodedToken = await admin.auth().verifyIdToken(idToken);
       return decodedToken;
     } catch (error) {
-      console.error('Firebase token verification failed:', error);
+      console.error('Firebase token verification failed:', error.message);
       return null;
     }
   }
