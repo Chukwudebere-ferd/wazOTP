@@ -1,55 +1,66 @@
+const db = require('../lib/db');
+
 class OTPService {
-  constructor() {
-    // Using a Map for in-memory storage
-    // Key: phone, Value: { otp, expiry }
-    this.otpStore = new Map();
+  async generateOTP(phone, userId) {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiredAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await db.query(
+      `
+        INSERT INTO otps (user_id, phone, code, expired_at)
+        VALUES (?, ?, ?, ?)
+      `,
+      [userId, phone, code, expiredAt],
+    );
+
+    return code;
   }
 
-  /**
-   * Generates a 6-digit OTP and stores it in memory
-   * @param {string} phone - User phone number
-   * @returns {Promise<string>} - The generated OTP
-   */
-  async generateOTP(phone) {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiry = Date.now() + 5 * 60 * 1000; // 5 minutes from now
-    
-    this.otpStore.set(phone, { otp, expiry });
+  async verifyOTP(phone, otp, userId) {
+    const results = await db.query(
+      `
+        SELECT id, code, expired_at, verified_at
+        FROM otps
+        WHERE phone = ? AND user_id = ? AND verified_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      [phone, userId],
+    );
 
-    // Automatically clean up after 5 minutes
-    setTimeout(() => {
-      const stored = this.otpStore.get(phone);
-      if (stored && stored.expiry <= Date.now()) {
-        this.otpStore.delete(phone);
-      }
-    }, 5 * 60 * 1000);
-
-    return otp;
-  }
-
-  /**
-   * Verifies if the provided OTP matches the one in memory
-   * @param {string} phone - User phone number
-   * @param {string} otp - Provided OTP
-   * @returns {Promise<boolean>}
-   */
-  async verifyOTP(phone, otp) {
-    const stored = this.otpStore.get(phone);
-    
-    if (!stored) return false;
-    
-    // Check if expired
-    if (Date.now() > stored.expiry) {
-      this.otpStore.delete(phone);
+    if (results.length === 0) {
       return false;
     }
-    
-    if (stored.otp === otp) {
-      this.otpStore.delete(phone);
-      return true;
+
+    const record = results[0];
+
+    if (new Date() > new Date(record.expired_at)) {
+      return false;
     }
 
-    return false;
+    if (record.code !== otp) {
+      return false;
+    }
+
+    await db.query(
+      `
+        UPDATE otps
+        SET verified_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `,
+      [record.id],
+    );
+
+    return true;
+  }
+
+  async cleanupExpiredOTPs() {
+    await db.query(
+      `
+        DELETE FROM otps
+        WHERE expired_at < CURRENT_TIMESTAMP AND verified_at IS NULL
+      `,
+    );
   }
 }
 

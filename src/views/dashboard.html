@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>wazOTP Developer Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero-card">
+        <span class="eyebrow">wazOTP Platform</span>
+        <h1>Link one WhatsApp session for OTP and notifications.</h1>
+        <p class="hero-copy">
+          Sign in with Firebase, link your number, copy your developer key, and use the same session for
+          WhatsApp OTP verification and notification delivery across your projects.
+        </p>
+        <div class="hero-status" id="heroStatus">Waiting for authentication.</div>
+      </section>
+
+      <section class="panel auth-panel" id="authPanel">
+        <div class="panel-header">
+          <div>
+            <span class="eyebrow">Dashboard Access</span>
+            <h2>Sign in</h2>
+          </div>
+        </div>
+
+        <div class="auth-grid">
+          <form id="emailForm" class="stack">
+            <label>
+              Email
+              <input id="emailInput" type="email" placeholder="you@example.com" required />
+            </label>
+            <label>
+              Password
+              <div class="password-wrapper">
+                <input id="passwordInput" type="password" placeholder="Minimum 6 characters" required />
+                <button type="button" id="togglePassword" class="password-toggle" aria-label="Toggle password visibility">
+                  <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+            </label>
+            <div class="button-row">
+              <button type="submit" id="signinButton" class="button primary">Sign In</button>
+              <button type="button" id="signupButton" class="button secondary">Create Account</button>
+            </div>
+          </form>
+
+          <div class="auth-divider">
+            <span>or</span>
+          </div>
+
+          <div class="stack">
+            <button type="button" id="googleButton" class="button google">Continue with Google</button>
+            <p class="hint">
+              Email/password and Google both use Firebase Auth. Your app data stays in MySQL.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel control-panel hidden" id="controlPanel">
+        <div class="panel-header">
+          <div>
+            <span class="eyebrow">Developer Workspace</span>
+            <h2>WhatsApp Session</h2>
+          </div>
+          <button type="button" id="logoutButton" class="button ghost">Sign Out</button>
+        </div>
+
+        <div class="account-strip">
+          <div class="info-box">
+            <div class="info-label">Signed in as</div>
+            <div class="info-value" id="accountEmail">-</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Developer API key</div>
+            <div class="api-key-container">
+              <div class="code blurred" id="apiKeyValue">-</div>
+              <button type="button" id="copyApiKeyButton" class="icon-button" aria-label="Copy API Key" title="Copy API Key">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="account-strip">
+          <div class="info-box">
+            <div class="info-label">Built-in features</div>
+            <div class="info-value" style="font-size: 0.9375rem; color: var(--wa-text-muted);">OTP verification and custom notification sending.</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Developer docs</div>
+            <div class="info-value" style="font-size: 0.9375rem;"><a href="/docs">Open API docs &rarr;</a></div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="status-card">
+            <div class="status-topline">
+              <span class="eyebrow" style="margin: 0;">Current State</span>
+              <div class="pill" id="sessionState">idle</div>
+            </div>
+            <div class="status-details">
+              <div class="status-row">
+                <span>Phone</span>
+                <strong id="phoneValue">-</strong>
+              </div>
+              <div class="status-row">
+                <span>Device</span>
+                <strong id="deviceValue">-</strong>
+              </div>
+              <div class="status-row">
+                <span>Last connected</span>
+                <strong id="connectedValue">-</strong>
+              </div>
+              <div class="status-row">
+                <span>Last QR</span>
+                <strong id="qrValue">-</strong>
+              </div>
+              <div class="status-row">
+                <span>Logout reason</span>
+                <strong id="logoutReasonValue">-</strong>
+              </div>
+            </div>
+            <div class="button-row">
+              <button type="button" id="connectButton" class="button primary">Start Session</button>
+              <button type="button" id="relinkButton" class="button secondary">Relink Session</button>
+            </div>
+          </div>
+
+          <div class="qr-card">
+            <span class="eyebrow">Scan Area</span>
+            <h3>QR Code</h3>
+            <div class="qr-frame" id="qrFrame">
+              <div class="qr-placeholder" id="qrPlaceholder">
+                No QR yet. Start or relink the session to generate one.
+              </div>
+              <canvas id="qrCanvas" class="hidden"></canvas>
+            </div>
+            <p class="hint" id="qrHint">
+              The page refreshes session state automatically. When the account is logged out, a relink becomes available here.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="dashboard.js"></script>
+  </body>
+</html>

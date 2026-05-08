@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>wazOTP API Docs</title>
+    <link rel="stylesheet" href="dashboard.css" />
+  </head>
+  <body>
+    <main class="app-shell docs-grid">
+      <section class="hero-card">
+        <span class="eyebrow">wazOTP Integration Guide</span>
+        <h1>How to test and use wazOTP in your project.</h1>
+        <p class="hero-copy">
+          wazOTP connects a single WhatsApp account and uses it to programmatically send OTPs and custom notifications to your users. Here is exactly what it can do and how to test it right now.
+        </p>
+        <div class="hero-status" style="margin-top: 16px;">
+          <strong>Step 1:</strong> Open <a href="/dashboard">/dashboard</a> to link your WhatsApp account and copy your API key.
+        </div>
+      </section>
+
+      <section class="doc-card">
+        <span class="eyebrow">Getting Started</span>
+        <h2>Authentication</h2>
+        <div class="doc-list">
+          <div class="doc-list-item">Every request you make to the wazOTP API requires your secret API key.</div>
+          <div class="doc-list-item">You can find this key in your Dashboard. It is blurred for security; hover over it to reveal or click the copy icon.</div>
+          <div class="doc-list-item">Pass it in the <code class="code">Authorization</code> header as a Bearer token.</div>
+        </div>
+        <pre>Authorization: Bearer sk_live_your_generated_key</pre>
+      </section>
+
+      <section class="doc-card">
+        <span class="eyebrow">Feature 1: Notifications</span>
+        <h2>Send a WhatsApp Message</h2>
+        <div class="doc-list">
+          <div class="doc-list-item"><strong>Capability:</strong> Instantly send any custom text message to any WhatsApp number in the world, directly from your linked account.</div>
+          <div class="doc-list-item"><strong>How to test:</strong> Open your terminal and run the curl command below, replacing the API key and phone number with your own.</div>
+        </div>
+        <pre>curl -X POST http://localhost:3000/v1/messages/send \
+  -H "Authorization: Bearer sk_live_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+2348012345678",
+    "message": "Hello from wazOTP! Your transaction of $50 was successful.",
+    "event": "transaction_alert"
+  }'</pre>
+      </section>
+
+      <section class="doc-card">
+        <span class="eyebrow">Feature 2: OTP Verification</span>
+        <h2>Send a One-Time Password</h2>
+        <div class="doc-list">
+          <div class="doc-list-item"><strong>Capability:</strong> Automatically generate and send a 6-digit OTP code to a user for phone verification or 2FA.</div>
+          <div class="doc-list-item"><strong>How to test:</strong> Send a POST request to the send endpoint. The user will receive the OTP instantly on WhatsApp.</div>
+        </div>
+        <pre>curl -X POST http://localhost:3000/v1/otp/send \
+  -H "Authorization: Bearer sk_live_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone": "+2348012345678"
+  }'</pre>
+      </section>
+
+      <section class="doc-card">
+        <span class="eyebrow">Feature 2: OTP Verification</span>
+        <h2>Verify the OTP Code</h2>
+        <div class="doc-list">
+          <div class="doc-list-item"><strong>Capability:</strong> Verify the code the user entered. wazOTP securely checks it against the database and enforces expiration times (default 10 mins).</div>
+          <div class="doc-list-item"><strong>How to test:</strong> Take the OTP code you received on WhatsApp and submit it to the verify endpoint.</div>
+        </div>
+        <pre>curl -X POST http://localhost:3000/v1/otp/verify \
+  -H "Authorization: Bearer sk_live_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone": "+2348012345678",
+    "code": "123456"
+  }'</pre>
+      </section>
+
+      <section class="doc-card">
+        <span class="eyebrow">Dashboard APIs</span>
+        <h2>Session Control (For UI)</h2>
+        <div class="doc-list">
+          <div class="doc-list-item">The dashboard UI uses these endpoints internally to manage the WhatsApp connection via Baileys.</div>
+          <div class="doc-list-item"><span class="endpoint get">GET /v1/whatsapp/session/status</span> Returns connection state (connected, qr_ready, etc.)</div>
+          <div class="doc-list-item"><span class="endpoint get">GET /v1/whatsapp/session/qr</span> Returns the raw QR string for rendering.</div>
+          <div class="doc-list-item"><span class="endpoint post">POST /v1/whatsapp/session/connect</span> Initializes a new connection to WhatsApp.</div>
+          <div class="doc-list-item"><span class="endpoint post">POST /v1/whatsapp/session/relink</span> Clears old session data and generates a fresh QR.</div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

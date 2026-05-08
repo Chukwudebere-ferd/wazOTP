@@ -1,4 +1,5 @@
 const authService = require('../services/auth.service');
+const whatsappService = require('../services/whatsapp.service');
 
 class AuthController {
   /**
@@ -41,9 +42,45 @@ class AuthController {
       };
     } catch (error) {
       request.log.error(error);
+
+      if (error.message.includes('Firebase')) {
+        return reply.status(503).send({
+          success: false,
+          message: error.message
+        });
+      }
+
       return reply.status(500).send({ 
         success: false, 
         message: 'Sync failed' 
+      });
+    }
+  }
+
+  async getCurrentDeveloper(request, reply) {
+    try {
+      const user = await authService.getUserById(request.authUser.id);
+      const apiKey = await authService.getActiveApiKeyForUser(request.authUser.id);
+      const session = await whatsappService.getSessionStatus(request.authUser.id);
+
+      return {
+        success: true,
+        data: {
+          user: {
+            id: user?.id || request.authUser.id,
+            email: user?.email || request.authUser.email,
+            firebaseUid: user?.firebase_uid || request.authUser.firebaseUid,
+          },
+          apiKey: apiKey?.key || null,
+          session,
+        },
+      };
+    } catch (error) {
+      request.log.error(error);
+
+      return reply.status(500).send({
+        success: false,
+        message: 'Failed to load developer summary',
       });
     }
   }

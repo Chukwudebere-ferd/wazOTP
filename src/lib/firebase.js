@@ -1,16 +1,58 @@
 const admin = require('firebase-admin');
 const path = require('path');
 
-// Path to your service account key file
 const serviceAccountPath = path.join(__dirname, '../../firebase-service-account.json');
 
-try {
-  admin.initializeApp({
-    credential: admin.credential.cert(require(serviceAccountPath))
-  });
-  console.log('🔥 Firebase Admin initialized');
-} catch (error) {
-  console.warn('⚠️ Firebase Admin could not be initialized:', error.message);
+let initialized = false;
+
+function initializeFirebase() {
+  if (initialized || admin.apps.length > 0) {
+    initialized = true;
+    return admin;
+  }
+
+  try {
+    const serviceAccount = require(serviceAccountPath);
+
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+
+    initialized = true;
+    console.log('Firebase Admin initialized');
+  } catch (error) {
+    console.error(`Firebase Admin initialization failed: ${error.message}`);
+    throw new Error(
+      `Firebase is not configured. Ensure firebase-service-account.json exists and is valid. Error: ${error.message}`
+    );
+  }
+
+  return admin;
 }
 
-module.exports = admin;
+function isFirebaseReady() {
+  return initialized || admin.apps.length > 0;
+}
+
+function getFirebaseAdmin() {
+  if (!isFirebaseReady()) {
+    try {
+      initializeFirebase();
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  if (!isFirebaseReady()) {
+    throw new Error('Firebase is not configured.');
+  }
+
+  return admin;
+}
+
+module.exports = {
+  admin,
+  getFirebaseAdmin,
+  isFirebaseReady,
+  initializeFirebase,
+};

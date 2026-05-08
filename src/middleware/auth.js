@@ -2,7 +2,7 @@ const authService = require('../services/auth.service');
 
 /**
  * Authentication Middleware
- * Validates the API key against the PostgreSQL database.
+ * Validates the API key against the SQL database.
  */
 const authMiddleware = async (request, reply) => {
   const authHeader = request.headers.authorization;
@@ -32,6 +32,14 @@ const authMiddleware = async (request, reply) => {
     request.userId = userId;
   } catch (error) {
     request.log.error(error);
+
+    if (error.message.includes('Firebase')) {
+      return reply.status(503).send({
+        success: false,
+        message: error.message
+      });
+    }
+
     return reply.status(500).send({
       success: false,
       message: 'Internal server error during authentication'

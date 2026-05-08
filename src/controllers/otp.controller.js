@@ -11,16 +11,14 @@ class OTPController {
 
     try {
       // 1. Generate OTP
-      const otp = await otpService.generateOTP(phone);
+      const otp = await otpService.generateOTP(phone, request.userId);
 
-      // 2. Initialize WhatsApp session if not already active
-      // Using 'dev_default' as a placeholder sessionId for now
-      const sessionId = request.developerId || 'dev_default';
-      await whatsappService.initSession(sessionId);
+      // 2. Ensure the developer's WhatsApp session is initialized
+      await whatsappService.connectSession(request.userId);
 
       // 3. Send via WhatsApp
       const message = `Your wazOTP verification code is: ${otp}. It expires in 5 minutes.`;
-      await whatsappService.sendMessage(sessionId, phone, message);
+      await whatsappService.sendMessage(request.userId, phone, message, 'otp_send');
 
       return { success: true, message: 'OTP sent' };
     } catch (error) {
@@ -37,7 +35,7 @@ class OTPController {
     }
 
     try {
-      const isValid = await otpService.verifyOTP(phone, otp);
+      const isValid = await otpService.verifyOTP(phone, otp, request.userId);
 
       if (isValid) {
         return { success: true, message: 'OTP verified' };
