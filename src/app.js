@@ -15,6 +15,10 @@ const fastify = require('fastify')({
   },
 });
 
+fastify.addHook('onRequest', async (request) => {
+  console.log(`📥 Incoming ${request.method} request to ${request.url}`);
+});
+
 fastify.register(require('./routes/auth.routes'));
 fastify.register(require('./routes/otp.routes'));
 fastify.register(require('./routes/messages.routes'));
@@ -35,6 +39,7 @@ const start = async () => {
     const port = Number(process.env.PORT || 3000);
     const host = '0.0.0.0';
 
+    console.log(`🌍 Environment: Port=${port}, Node_Env=${process.env.NODE_ENV}`);
     console.log('🚀 Starting wazOTP production server...');
 
     // 1. Start listening IMMEDIATELY so health checks pass
