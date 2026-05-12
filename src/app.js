@@ -1,20 +1,24 @@
+process.on('uncaughtException', (err) => {
+  console.error('❌ UNCAUGHT EXCEPTION:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ UNHANDLED REJECTION:', reason);
+});
+
+console.log('🏁 APP FILE LOADED');
+console.log('🐢 NODE VERSION:', process.version);
+
 require('dotenv').config();
 
 const db = require('./lib/db');
 const { getFirebaseAdmin } = require('./lib/firebase');
 
 const fastify = require('fastify')({
-  logger: {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname',
-      },
-    },
-  },
+  logger: true // Simplified logger for Alpine compatibility
 });
 
+// Log every request to debug the Health Check
 fastify.addHook('onRequest', async (request) => {
   console.log(`📥 Incoming ${request.method} request to ${request.url}`);
 });
@@ -40,10 +44,11 @@ const start = async () => {
     const host = '0.0.0.0';
 
     console.log(`🌍 Environment: Port=${port}, Node_Env=${process.env.NODE_ENV}`);
-    console.log('🚀 Starting wazOTP production server...');
+    console.log('🚀 ABOUT TO START FASTIFY');
 
     // 1. Start listening IMMEDIATELY so health checks pass
     await fastify.listen({ port, host });
+    console.log('✅ FASTIFY STARTED');
     console.log(`📡 Server listening on port ${port}`);
 
     // 2. Perform background initializations
