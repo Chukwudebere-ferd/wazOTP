@@ -271,6 +271,17 @@ Pull requests are welcome. For major changes, open an issue first.
 
 ---
 
+## 🧪 Testing the API
+
+You can use the included test script to verify your setup:
+
+1. Copy your API Key from the Dashboard.
+2. Run the following command:
+   ```bash
+   node test-api.js YOUR_API_KEY
+   ```
+   This will send a test notification and an OTP to a predefined number.
+
 ## 📄 License
 
 MIT

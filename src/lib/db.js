@@ -153,6 +153,22 @@ async function ensureSchema() {
           ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS whatsapp_auth (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        session_id BIGINT UNSIGNED NOT NULL,
+        file_name VARCHAR(191) NOT NULL,
+        data LONGTEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_whatsapp_auth_session_file (session_id, file_name),
+        CONSTRAINT fk_whatsapp_auth_session
+          FOREIGN KEY (session_id) REFERENCES whatsapp_sessions(id)
+          ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
   } finally {
     connection.release();
   }

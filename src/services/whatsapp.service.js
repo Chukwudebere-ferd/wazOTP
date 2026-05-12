@@ -10,6 +10,8 @@ const path = require('path');
 const pino = require('pino');
 const db = require('../lib/db');
 
+const { useDbAuthState } = require('../lib/whatsapp-auth');
+
 class WhatsAppService {
   constructor() {
     this.sessions = new Map();
@@ -155,8 +157,7 @@ class WhatsAppService {
     }
 
     const sessionRecord = await this.ensureSessionRecord(userId, sessionKey);
-    const sessionDir = this.ensureSessionDir(sessionKey);
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+    const { state, saveCreds, clearSession } = await useDbAuthState(sessionRecord.id);
     const { version } = await fetchLatestBaileysVersion();
 
     await this.updateSessionRecord(sessionKey, {
@@ -301,7 +302,11 @@ class WhatsAppService {
     }
 
     this.sessions.delete(sessionKey);
-    fs.rmSync(this.getSessionDir(sessionKey), { recursive: true, force: true });
+    const sessionRecord = await this.getSessionRecordByKey(sessionKey);
+    if (sessionRecord) {
+      const { clearSession } = await useDbAuthState(sessionRecord.id);
+      await clearSession();
+    }
 
     await this.updateSessionRecord(sessionKey, {
       status: 'initializing',
@@ -329,7 +334,11 @@ class WhatsAppService {
     const tracked = this.getTrackedSession(sessionKey);
     const session = await this.ensureSessionRecord(userId, sessionKey);
 
-    const recipientPhone = phone.replace('+', '');
+    // Normalize phone number
+    let recipientPhone = phone.replace(/\D/g, ''); // Remove all non-digits
+    if (recipientPhone.startsWith('0') && recipientPhone.length === 11) {
+      recipientPhone = `234${recipientPhone.substring(1)}`;
+    }
     const logResult = async (deliveryStatus, extra = {}) => {
       await db.query(
         `

@@ -1,158 +1,145 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>wazOTP Developer Dashboard</title>
-    <link rel="stylesheet" href="dashboard.css" />
-  </head>
-  <body>
-    <main class="app-shell">
-      <section class="hero-card">
-        <span class="eyebrow">wazOTP Platform</span>
-        <h1>Link one WhatsApp session for OTP and notifications.</h1>
-        <p class="hero-copy">
-          Sign in with Firebase, link your number, copy your developer key, and use the same session for
-          WhatsApp OTP verification and notification delivery across your projects.
-        </p>
-        <div class="hero-status" id="heroStatus">Waiting for authentication.</div>
-      </section>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>wazOTP | Developer Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body class="with-sidebar">
+  <aside class="sidebar">
+    <a href="/dashboard" class="logo-area">
+      <div class="logo-icon">W</div>
+      <div class="logo-text">wazOTP</div>
+    </a>
 
-      <section class="panel auth-panel" id="authPanel">
-        <div class="panel-header">
-          <div>
-            <span class="eyebrow">Dashboard Access</span>
-            <h2>Sign in</h2>
-          </div>
-        </div>
+    <nav class="nav-group">
+      <div class="nav-label">Management</div>
+      <a href="/dashboard" class="nav-link active">Dashboard</a>
+      <a href="/docs" class="nav-link">API Docs</a>
+    </nav>
 
-        <div class="auth-grid">
-          <form id="emailForm" class="stack">
-            <label>
-              Email
-              <input id="emailInput" type="email" placeholder="you@example.com" required />
-            </label>
-            <label>
-              Password
-              <div class="password-wrapper">
-                <input id="passwordInput" type="password" placeholder="Minimum 6 characters" required />
-                <button type="button" id="togglePassword" class="password-toggle" aria-label="Toggle password visibility">
-                  <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                </button>
-              </div>
-            </label>
-            <div class="button-row">
-              <button type="submit" id="signinButton" class="button primary">Sign In</button>
-              <button type="button" id="signupButton" class="button secondary">Create Account</button>
-            </div>
-          </form>
+    <nav class="nav-group">
+      <div class="nav-label">Account</div>
+      <a href="#" class="nav-link" id="accountLink">My Profile</a>
+      <button type="button" id="logoutButton" class="nav-link" style="background: none; border: none; width: 100%; text-align: left; cursor: pointer;">Sign Out</button>
+    </nav>
 
-          <div class="auth-divider">
-            <span>or</span>
-          </div>
+    <div style="margin-top: auto;">
+      <div class="glass-card" style="padding: 16px; font-size: 0.75rem; color: var(--wa-text-muted);">
+        Connected to <strong>v1.0.0</strong>
+      </div>
+    </div>
+  </aside>
 
-          <div class="stack">
-            <button type="button" id="googleButton" class="button google">Continue with Google</button>
-            <p class="hint">
-              Email/password and Google both use Firebase Auth. Your app data stays in MySQL.
-            </p>
-          </div>
-        </div>
-      </section>
+  <main class="main-content">
+    <section class="doc-section">
+      <span class="eyebrow" id="heroStatus">Ready to communicate</span>
+      <h1>Developer Dashboard</h1>
+      <p>Manage your WhatsApp session, retrieve your API key, and monitor your service health.</p>
 
-      <section class="panel control-panel hidden" id="controlPanel">
-        <div class="panel-header">
-          <div>
-            <span class="eyebrow">Developer Workspace</span>
-            <h2>WhatsApp Session</h2>
-          </div>
-          <button type="button" id="logoutButton" class="button ghost">Sign Out</button>
-        </div>
+      <!-- Auth Section -->
+      <div id="authPanel" class="glass-card" style="max-width: 500px; margin: 0 auto;">
+        <h2 style="margin-bottom: 8px;">Welcome Back</h2>
+        <p style="font-size: 0.875rem; margin-bottom: 32px;">Please sign in to access your developer console.</p>
 
-        <div class="account-strip">
-          <div class="info-box">
-            <div class="info-label">Signed in as</div>
-            <div class="info-value" id="accountEmail">-</div>
-          </div>
-          <div class="info-box">
-            <div class="info-label">Developer API key</div>
-            <div class="api-key-container">
-              <div class="code blurred" id="apiKeyValue">-</div>
-              <button type="button" id="copyApiKeyButton" class="icon-button" aria-label="Copy API Key" title="Copy API Key">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        <form id="emailForm" class="stack">
+          <label>
+            Email Address
+            <input id="emailInput" type="email" placeholder="you@example.com" required />
+          </label>
+          <label>
+            Password
+            <div class="password-wrapper">
+              <input id="passwordInput" type="password" placeholder="••••••••" required />
+              <button type="button" id="togglePassword" class="password-toggle">
+                <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
                 </svg>
+              </button>
+            </div>
+          </label>
+          <div class="button-row" style="margin-top: 12px;">
+            <button type="submit" id="signinButton" class="button primary" style="flex: 1;">Sign In</button>
+            <button type="button" id="signupButton" class="button secondary" style="flex: 1;">Sign Up</button>
+          </div>
+        </form>
+
+        <div class="auth-divider" style="margin: 32px 0;">
+          <span>or</span>
+        </div>
+
+        <button type="button" id="googleButton" class="button google">
+          <svg style="width: 18px; margin-right: 12px;" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Continue with Google
+        </button>
+      </div>
+
+      <!-- Control Panel -->
+      <div id="controlPanel" class="hidden">
+        <div class="stats-grid">
+          <div class="stat-item glass-card">
+            <div class="stat-label">Signed in as</div>
+            <div class="stat-value" id="accountEmail" style="font-size: 1.125rem;">-</div>
+          </div>
+          <div class="stat-item glass-card">
+            <div class="stat-label">API Key</div>
+            <div class="api-key-container">
+              <div class="code blurred" id="apiKeyValue" style="font-size: 1rem;">-</div>
+              <button type="button" id="copyApiKeyButton" class="icon-button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
               </button>
             </div>
           </div>
         </div>
 
-        <div class="account-strip">
-          <div class="info-box">
-            <div class="info-label">Built-in features</div>
-            <div class="info-value" style="font-size: 0.9375rem; color: var(--wa-text-muted);">OTP verification and custom notification sending.</div>
-          </div>
-          <div class="info-box">
-            <div class="info-label">Developer docs</div>
-            <div class="info-value" style="font-size: 0.9375rem;"><a href="/docs">Open API docs &rarr;</a></div>
-          </div>
-        </div>
-
         <div class="dashboard-grid">
-          <div class="status-card">
+          <div class="glass-card">
             <div class="status-topline">
-              <span class="eyebrow" style="margin: 0;">Current State</span>
-              <div class="pill" id="sessionState">idle</div>
+              <h3 style="margin: 0;">Session Health</h3>
+              <div class="pill active" id="sessionState">connected</div>
             </div>
-            <div class="status-details">
-              <div class="status-row">
-                <span>Phone</span>
-                <strong id="phoneValue">-</strong>
-              </div>
-              <div class="status-row">
-                <span>Device</span>
-                <strong id="deviceValue">-</strong>
-              </div>
-              <div class="status-row">
-                <span>Last connected</span>
-                <strong id="connectedValue">-</strong>
-              </div>
-              <div class="status-row">
-                <span>Last QR</span>
-                <strong id="qrValue">-</strong>
-              </div>
-              <div class="status-row">
-                <span>Logout reason</span>
-                <strong id="logoutReasonValue">-</strong>
-              </div>
+            
+            <div class="status-details" style="margin-top: 24px;">
+              <div class="status-row"><span>Linked Phone</span><strong id="phoneValue">-</strong></div>
+              <div class="status-row"><span>Active Device</span><strong id="deviceValue">-</strong></div>
+              <div class="status-row"><span>Last Heartbeat</span><strong id="connectedValue">-</strong></div>
+              <div class="status-row"><span>QR Timestamp</span><strong id="qrValue">-</strong></div>
+              <div class="status-row" style="color: var(--wa-danger);"><span style="color: inherit;">Termination</span><strong id="logoutReasonValue">-</strong></div>
             </div>
-            <div class="button-row">
-              <button type="button" id="connectButton" class="button primary">Start Session</button>
-              <button type="button" id="relinkButton" class="button secondary">Relink Session</button>
+
+            <div class="button-row" style="margin-top: 32px;">
+              <button type="button" id="connectButton" class="button primary" style="flex: 1;">Start Engine</button>
+              <button type="button" id="relinkButton" class="button secondary" style="flex: 1;">Force Relink</button>
             </div>
           </div>
 
-          <div class="qr-card">
-            <span class="eyebrow">Scan Area</span>
-            <h3>QR Code</h3>
-            <div class="qr-frame" id="qrFrame">
+          <div class="glass-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <h3 style="margin-bottom: 8px;">WhatsApp Scan</h3>
+            <p class="hint" style="text-align: center; margin-bottom: 24px;">Scan this QR in your WhatsApp app to link this instance.</p>
+            
+            <div class="qr-frame" id="qrFrame" style="width: 100%; border-style: solid; background: rgba(0,0,0,0.2);">
               <div class="qr-placeholder" id="qrPlaceholder">
-                No QR yet. Start or relink the session to generate one.
+                Engine is idle. Click <strong>Start Engine</strong> to generate a QR code.
               </div>
               <canvas id="qrCanvas" class="hidden"></canvas>
             </div>
-            <p class="hint" id="qrHint">
-              The page refreshes session state automatically. When the account is logged out, a relink becomes available here.
-            </p>
+
+            <div id="qrHint" class="hint" style="margin-top: 16px; text-align: center;">
+              Polling server for connection status...
+            </div>
           </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </section>
 
-    <script type="module" src="dashboard.js"></script>
-  </body>
+    <footer style="margin-top: 60px; color: var(--wa-text-muted); font-size: 0.8125rem; text-align: center;">
+      &copy; 2026 wazOTP Platform &bull; v1.0.0
+    </footer>
+  </main>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
 </html>
+
