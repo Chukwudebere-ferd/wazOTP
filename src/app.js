@@ -30,16 +30,23 @@ fastify.get('/', async () => ({
 
 const start = async () => {
   try {
+    console.log('🚀 Starting wazOTP production server...');
+    
+    console.log('📦 Initializing Firebase...');
     getFirebaseAdmin();
+    
+    console.log('🗄️ Checking Database schema...');
     await db.ensureSchema();
-    await fastify.listen({
-      port: Number(process.env.PORT || 3000),
-      host: '0.0.0.0',
-    });
+    
+    const port = Number(process.env.PORT || 3000);
+    const host = '0.0.0.0';
 
-    console.log(`wazOTP server running at http://localhost:${process.env.PORT || 3000}`);
+    await fastify.listen({ port, host });
+
+    console.log(`✅ wazOTP server is live at http://${host}:${port}`);
   } catch (err) {
-    fastify.log.error(err);
+    console.error('❌ CRITICAL STARTUP ERROR:', err.message);
+    if (err.stack) console.error(err.stack);
     process.exit(1);
   }
 };
