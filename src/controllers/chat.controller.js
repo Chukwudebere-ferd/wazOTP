@@ -6,8 +6,12 @@ class ChatController {
       return reply.status(400).send({ error: 'Message is required' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    const apiKeys = [
+      process.env.GEMINI_API_KEY,
+      process.env.GEMINI_API_KEY_2
+    ].filter(Boolean);
+
+    if (apiKeys.length === 0) {
       return reply.status(500).send({ error: 'GEMINI_API_KEY is not configured on the server.' });
     }
 
@@ -44,39 +48,51 @@ wazOTP is an Enterprise WhatsApp Gateway and API platform. It allows developers 
 ## Instructions
 Keep your answers professional, friendly, concise, and technically accurate. Format your output using markdown (bolding, lists, code blocks) to make it easy to read.`;
 
-    try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: { text: systemPrompt }
+    const requestBody = JSON.stringify({
+      system_instruction: {
+        parts: { text: systemPrompt }
+      },
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: message }]
+        }
+      ]
+    });
+
+    for (let i = 0; i < apiKeys.length; i++) {
+      const key = apiKeys[i];
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
           },
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: message }]
-            }
-          ]
-        })
-      });
+          body: requestBody
+        });
 
-      if (!response.ok) {
-        const errorData = await response.text();
-        request.log.error(`Gemini API Error: ${errorData}`);
-        throw new Error('Gemini API returned an error');
+        if (!response.ok) {
+          const errorData = await response.text();
+          request.log.warn(`Gemini API Error with key index ${i}: Status ${response.status} - ${errorData}`);
+          
+          if (response.status === 429) {
+            continue; // Quota exceeded, try the next key
+          }
+          
+          throw new Error(`Gemini API returned an error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I couldn't generate a response.";
+
+        return { reply: replyText };
+      } catch (error) {
+        request.log.error(`Error attempting key index ${i}: ${error.message}`);
+        // If it's the last key, it will fall through and return the 500 status below
       }
-
-      const data = await response.json();
-      const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I couldn't generate a response.";
-
-      return { reply: replyText };
-    } catch (error) {
-      request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to communicate with AI service' });
     }
+
+    return reply.status(500).send({ error: 'Failed to communicate with AI service. All available API keys exceeded quota or failed.' });
   }
 }
 
