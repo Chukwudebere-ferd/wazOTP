@@ -46,6 +46,7 @@ const elements = {
   qrPlaceholder: document.getElementById("qrPlaceholder"),
   qrHint: document.getElementById("qrHint"),
   copyApiKeyButton: document.getElementById("copyApiKeyButton"),
+  accountNavGroup: document.getElementById("accountNavGroup"),
 };
 
 function setHeroStatus(message) {
@@ -119,11 +120,13 @@ function formatDate(value) {
 function showAuthPanel() {
   elements.authPanel.classList.remove("hidden");
   elements.controlPanel.classList.add("hidden");
+  if (elements.accountNavGroup) elements.accountNavGroup.classList.add("hidden");
 }
 
 function showControlPanel() {
   elements.authPanel.classList.add("hidden");
   elements.controlPanel.classList.remove("hidden");
+  if (elements.accountNavGroup) elements.accountNavGroup.classList.remove("hidden");
 }
 
 function clearQr() {
@@ -412,3 +415,98 @@ function bindEvents() {
 initializeDashboard().catch((error) => {
   setHeroStatus(error.message);
 });
+
+// Chatbot Logic
+const chatBtn = document.getElementById('chatWidgetBtn');
+const chatWindow = document.getElementById('chatWindow');
+const closeBtn = document.getElementById('chatCloseBtn');
+const chatInput = document.getElementById('chatInput');
+const sendBtn = document.getElementById('chatSendBtn');
+const chatBody = document.getElementById('chatBody');
+
+if (chatBtn && chatWindow) {
+  chatBtn.addEventListener('click', () => {
+    chatWindow.classList.add('open');
+    chatBtn.style.transform = 'scale(0)';
+    chatInput.focus();
+  });
+
+  closeBtn.addEventListener('click', () => {
+    chatWindow.classList.remove('open');
+    chatBtn.style.transform = 'scale(1)';
+  });
+
+  chatInput.addEventListener('input', () => {
+    sendBtn.disabled = chatInput.value.trim().length === 0;
+  });
+
+  chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !sendBtn.disabled) {
+      sendMessage();
+    }
+  });
+
+  sendBtn.addEventListener('click', sendMessage);
+
+  async function sendMessage() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+
+    appendMessage(text, 'user');
+    chatInput.value = '';
+    sendBtn.disabled = true;
+
+    const typingId = 'typing-' + Date.now();
+    appendTypingIndicator(typingId);
+
+    try {
+      const response = await fetch('/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+      });
+
+      const data = await response.json();
+      removeElement(typingId);
+
+      if (response.ok) {
+        let formattedReply = data.reply
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/`(.*?)`/g, '<code class="code">$1</code>')
+          .replace(/\n/g, '<br/>');
+        appendMessage(formattedReply, 'bot', true);
+      } else {
+        appendMessage("Sorry, I encountered an error: " + (data.error || "Unknown error"), 'bot');
+      }
+    } catch (err) {
+      removeElement(typingId);
+      appendMessage("Network error. Could not reach the server.", 'bot');
+    }
+  }
+
+  function appendMessage(text, sender, isHtml = false) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `chat-message ${sender}`;
+    if (isHtml) {
+      msgDiv.innerHTML = text;
+    } else {
+      msgDiv.textContent = text;
+    }
+    chatBody.appendChild(msgDiv);
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  function appendTypingIndicator(id) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'chat-message bot';
+    msgDiv.id = id;
+    msgDiv.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+    chatBody.appendChild(msgDiv);
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  function removeElement(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+}

@@ -116,7 +116,7 @@
           <div class="code-lang">cURL</div>
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
-        <pre><code>curl -X POST http://localhost:3000/v1/messages/send \
+        <pre><code>curl -X POST https://wazotp.pxxl.pro/v1/messages/send \
   -H "Authorization: Bearer sk_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -131,7 +131,7 @@
           <div class="code-lang">Node.js (Fetch)</div>
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
-        <pre><code>const response = await fetch('http://localhost:3000/v1/messages/send', {
+        <pre><code>const response = await fetch('https://wazotp.pxxl.pro/v1/messages/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer sk_live_YOUR_API_KEY',
@@ -153,7 +153,7 @@ const data = await response.json();</code></pre>
         </div>
         <pre><code>import requests
 
-url = "http://localhost:3000/v1/messages/send"
+url = "https://wazotp.pxxl.pro/v1/messages/send"
 headers = {
     "Authorization": "Bearer sk_live_YOUR_API_KEY",
     "Content-Type": "application/json"
@@ -184,7 +184,7 @@ print(response.json())</code></pre>
           <div class="code-lang">cURL</div>
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
-        <pre><code>curl -X POST http://localhost:3000/v1/otp/send \
+        <pre><code>curl -X POST https://wazotp.pxxl.pro/v1/otp/send \
   -H "Authorization: Bearer sk_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "phone": "+2348012345678" }'</code></pre>
@@ -195,7 +195,7 @@ print(response.json())</code></pre>
           <div class="code-lang">Node.js (Fetch)</div>
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
-        <pre><code>const response = await fetch('http://localhost:3000/v1/otp/send', {
+        <pre><code>const response = await fetch('https://wazotp.pxxl.pro/v1/otp/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer sk_live_YOUR_API_KEY',
@@ -213,7 +213,7 @@ const data = await response.json();</code></pre>
         </div>
         <pre><code>import requests
 
-url = "http://localhost:3000/v1/otp/send"
+url = "https://wazotp.pxxl.pro/v1/otp/send"
 headers = {
     "Authorization": "Bearer sk_live_YOUR_API_KEY",
     "Content-Type": "application/json"
@@ -234,7 +234,7 @@ print(response.json())</code></pre>
           <div class="code-lang">cURL</div>
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
-        <pre><code>curl -X POST http://localhost:3000/v1/otp/verify \
+        <pre><code>curl -X POST https://wazotp.pxxl.pro/v1/otp/verify \
   -H "Authorization: Bearer sk_live_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -248,7 +248,7 @@ print(response.json())</code></pre>
           <div class="code-lang">Node.js (Fetch)</div>
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
-        <pre><code>const response = await fetch('http://localhost:3000/v1/otp/verify', {
+        <pre><code>const response = await fetch('https://wazotp.pxxl.pro/v1/otp/verify', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer sk_live_YOUR_API_KEY',
@@ -269,7 +269,7 @@ const data = await response.json();</code></pre>
         </div>
         <pre><code>import requests
 
-url = "http://localhost:3000/v1/otp/verify"
+url = "https://wazotp.pxxl.pro/v1/otp/verify"
 headers = {
     "Authorization": "Bearer sk_live_YOUR_API_KEY",
     "Content-Type": "application/json"
@@ -393,6 +393,11 @@ print(response.json())</code></pre>
     <div class="chat-body" id="chatBody">
       <div class="chat-message bot">
         Hi there! I'm the wazOTP technical assistant. How can I help you today?
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 12px;">
+          <button type="button" style="background: rgba(0, 168, 132, 0.1); color: var(--wa-primary); border: 1px solid rgba(0, 168, 132, 0.2); border-radius: 12px; padding: 6px 12px; font-size: 0.8125rem; cursor: pointer; text-align: left; transition: all 0.2s;" onclick="document.getElementById('chatInput').value=this.innerText; document.getElementById('chatSendBtn').disabled=false; document.getElementById('chatSendBtn').click(); this.parentElement.style.display='none';">What is the base URL?</button>
+          <button type="button" style="background: rgba(0, 168, 132, 0.1); color: var(--wa-primary); border: 1px solid rgba(0, 168, 132, 0.2); border-radius: 12px; padding: 6px 12px; font-size: 0.8125rem; cursor: pointer; text-align: left; transition: all 0.2s;" onclick="document.getElementById('chatInput').value=this.innerText; document.getElementById('chatSendBtn').disabled=false; document.getElementById('chatSendBtn').click(); this.parentElement.style.display='none';">How do I use JS fetch?</button>
+          <button type="button" style="background: rgba(0, 168, 132, 0.1); color: var(--wa-primary); border: 1px solid rgba(0, 168, 132, 0.2); border-radius: 12px; padding: 6px 12px; font-size: 0.8125rem; cursor: pointer; text-align: left; transition: all 0.2s;" onclick="document.getElementById('chatInput').value=this.innerText; document.getElementById('chatSendBtn').disabled=false; document.getElementById('chatSendBtn').click(); this.parentElement.style.display='none';">What SDK do I need to install?</button>
+        </div>
       </div>
     </div>
     <div class="chat-footer">
