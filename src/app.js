@@ -29,6 +29,7 @@ fastify.register(require('./routes/messages.routes'));
 fastify.register(require('./routes/whatsapp.routes'));
 fastify.register(require('./routes/dashboard.routes'));
 fastify.register(require('./routes/docs.routes'));
+fastify.register(require('./routes/chat.routes'));
 
 fastify.get('/', async () => ({
   name: 'wazOTP API',
