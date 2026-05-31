@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wazotp_api
+    ports:
+      - "3000:3000"
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./sessions:/app/sessions

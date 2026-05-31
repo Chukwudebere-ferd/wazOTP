@@ -1,0 +1,11 @@
+node_modules
+sessions
+.env
+firebase-service-account.json
+.git
+.gitignore
+npm-debug.log
+tests
+Dockerfile
+docker-compose.yml
+.dockerignore
