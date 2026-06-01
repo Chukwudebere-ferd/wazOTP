@@ -107,7 +107,7 @@ async function initializeDependencies() {
 async function prepareApp() {
   const app = getApp();
   await app.ready();
-  await initializeDependencies();
+  void initializeDependencies();
   return app;
 }
 
