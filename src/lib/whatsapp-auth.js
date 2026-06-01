@@ -1,10 +1,21 @@
-const { BufferJSON, initAuthCreds } = require('@whiskeysockets/baileys');
 const db = require('./db');
+
+let baileysModulePromise;
+
+async function loadBaileys() {
+  if (!baileysModulePromise) {
+    baileysModulePromise = import('@whiskeysockets/baileys');
+  }
+
+  return baileysModulePromise;
+}
 
 /**
  * Custom Baileys authentication state that stores session data in MySQL.
  */
 async function useDbAuthState(sessionId) {
+  const { BufferJSON, initAuthCreds } = await loadBaileys();
+
   const writeData = async (data, fileName) => {
     const serialized = JSON.stringify(data, BufferJSON.replacer);
     await db.query(
