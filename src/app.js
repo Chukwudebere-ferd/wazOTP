@@ -12,7 +12,7 @@ console.log('🐢 NODE VERSION:', process.version);
 require('dotenv').config();
 
 const db = require('./lib/db');
-const { getFirebaseAdmin } = require('./lib/firebase');
+const { getFirebaseAdmin, isFirebaseReady } = require('./lib/firebase');
 
 const fastify = require('fastify')({
   logger: true // Simplified logger for Alpine compatibility
@@ -31,13 +31,55 @@ fastify.register(require('./routes/dashboard.routes'));
 fastify.register(require('./routes/docs.routes'));
 fastify.register(require('./routes/chat.routes'));
 
+fastify.setErrorHandler((error, request, reply) => {
+  request.log.error(error);
+
+  if (db.isDbConnectionError(error)) {
+    return reply.status(503).send({
+      success: false,
+      message: 'Database is currently unavailable',
+    });
+  }
+
+  return reply.status(error.statusCode || 500).send({
+    success: false,
+    message: error.message || 'Internal server error',
+  });
+});
+
 fastify.get('/', async () => ({
   name: 'wazOTP API',
   version: '1.0.0',
   status: 'running',
 }));
 
-fastify.get('/health', async () => ({ status: 'ok' }));
+fastify.get('/health', async () => ({
+  status: 'ok',
+  dependencies: {
+    firebase: isFirebaseReady(),
+    database: db.getDbStatus(),
+  },
+}));
+
+async function initializeDependencies() {
+  try {
+    console.log('📦 Initializing Firebase...');
+    getFirebaseAdmin();
+  } catch (error) {
+    console.error(`⚠️ Firebase initialization degraded: ${error.message}`);
+  }
+
+  try {
+    console.log('🗄️ Checking Database schema...');
+    await db.ensureSchema();
+    console.log('✅ Database schema ready');
+  } catch (error) {
+    db.markSchemaUnavailable(error);
+    console.error(`⚠️ Database initialization degraded: ${error.message}`);
+  }
+
+  console.log('✅ Startup initialization finished');
+}
 
 const start = async () => {
   try {
@@ -52,14 +94,10 @@ const start = async () => {
     console.log('✅ FASTIFY STARTED');
     console.log(`📡 Server listening on port ${port}`);
 
-    // 2. Perform background initializations
-    console.log('📦 Initializing Firebase...');
-    getFirebaseAdmin();
-    
-    console.log('🗄️ Checking Database schema...');
-    await db.ensureSchema();
-    
-    console.log('✅ All systems ready. wazOTP is live!');
+    // Perform dependency initialization after the port is open.
+    void initializeDependencies();
+
+    console.log('✅ wazOTP is live!');
   } catch (err) {
     console.error('❌ CRITICAL STARTUP ERROR:', err.message);
     if (err.stack) console.error(err.stack);

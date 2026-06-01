@@ -1,6 +1,8 @@
 const mysql = require('mysql2/promise');
 
 let pool;
+let schemaReady = false;
+let lastSchemaError = null;
 
 function getDbConfig() {
   return {
@@ -169,13 +171,48 @@ async function ensureSchema() {
           ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    schemaReady = true;
+    lastSchemaError = null;
   } finally {
     connection.release();
   }
 }
 
+function markSchemaUnavailable(error) {
+  schemaReady = false;
+  lastSchemaError = error || null;
+}
+
+function getDbStatus() {
+  return {
+    ready: schemaReady,
+    error: lastSchemaError ? lastSchemaError.message : null,
+  };
+}
+
+function isDbConnectionError(error) {
+  if (!error) {
+    return false;
+  }
+
+  const transientCodes = new Set([
+    'EACCES',
+    'ECONNREFUSED',
+    'ENOTFOUND',
+    'ETIMEDOUT',
+    'EHOSTUNREACH',
+    'PROTOCOL_CONNECTION_LOST',
+  ]);
+
+  return transientCodes.has(error.code);
+}
+
 module.exports = {
   ensureSchema,
+  getDbStatus,
   getPool,
+  isDbConnectionError,
+  markSchemaUnavailable,
   query,
 };
