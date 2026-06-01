@@ -1,4 +1,5 @@
 const authService = require('../services/auth.service');
+const db = require('../lib/db');
 
 /**
  * Authentication Middleware
@@ -33,7 +34,7 @@ const authMiddleware = async (request, reply) => {
   } catch (error) {
     request.log.error(error);
 
-    if (error.message.includes('Firebase')) {
+    if (error.message.includes('Firebase') || db.isDbConnectionError(error)) {
       return reply.status(503).send({
         success: false,
         message: error.message

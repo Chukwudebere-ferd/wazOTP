@@ -1,5 +1,6 @@
 const authService = require('../services/auth.service');
 const whatsappService = require('../services/whatsapp.service');
+const db = require('../lib/db');
 
 class AuthController {
   /**
@@ -43,7 +44,7 @@ class AuthController {
     } catch (error) {
       request.log.error(error);
 
-      if (error.message.includes('Firebase')) {
+      if (error.message.includes('Firebase') || db.isDbConnectionError(error)) {
         return reply.status(503).send({
           success: false,
           message: error.message
@@ -77,6 +78,13 @@ class AuthController {
       };
     } catch (error) {
       request.log.error(error);
+
+      if (db.isDbConnectionError(error)) {
+        return reply.status(503).send({
+          success: false,
+          message: 'Database is currently unavailable',
+        });
+      }
 
       return reply.status(500).send({
         success: false,

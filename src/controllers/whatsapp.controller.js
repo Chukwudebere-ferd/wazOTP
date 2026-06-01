@@ -1,4 +1,5 @@
 const whatsappService = require('../services/whatsapp.service');
+const db = require('../lib/db');
 
 class WhatsAppController {
   async getSessionStatus(request, reply) {
@@ -7,6 +8,14 @@ class WhatsAppController {
       return { success: true, data: session };
     } catch (error) {
       request.log.error(error);
+
+      if (db.isDbConnectionError(error)) {
+        return reply.status(503).send({
+          success: false,
+          message: 'Database is currently unavailable',
+        });
+      }
+
       return reply.status(500).send({
         success: false,
         message: 'Failed to load WhatsApp session status',
@@ -24,6 +33,14 @@ class WhatsAppController {
       };
     } catch (error) {
       request.log.error(error);
+
+      if (db.isDbConnectionError(error)) {
+        return reply.status(503).send({
+          success: false,
+          message: 'Database is currently unavailable',
+        });
+      }
+
       return reply.status(500).send({
         success: false,
         message: 'Failed to load WhatsApp session QR',
@@ -44,6 +61,14 @@ class WhatsAppController {
       };
     } catch (error) {
       request.log.error(error);
+
+      if (db.isDbConnectionError(error)) {
+        return reply.status(503).send({
+          success: false,
+          message: 'Database is currently unavailable',
+        });
+      }
+
       return reply.status(500).send({
         success: false,
         message: 'Failed to initialize WhatsApp session',
@@ -66,6 +91,14 @@ class WhatsAppController {
       };
     } catch (error) {
       request.log.error(error);
+
+      if (db.isDbConnectionError(error)) {
+        return reply.status(503).send({
+          success: false,
+          message: 'Database is currently unavailable',
+        });
+      }
+
       return reply.status(500).send({
         success: false,
         message: 'Failed to relink WhatsApp session',

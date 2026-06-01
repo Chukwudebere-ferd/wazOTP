@@ -1,4 +1,5 @@
 const authService = require('../services/auth.service');
+const db = require('../lib/db');
 
 async function dashboardAuth(request, reply) {
   const authHeader = request.headers.authorization;
@@ -35,7 +36,7 @@ async function dashboardAuth(request, reply) {
   } catch (error) {
     request.log.error(error);
 
-    if (error.message.includes('Firebase')) {
+    if (error.message.includes('Firebase') || db.isDbConnectionError(error)) {
       return reply.status(503).send({
         success: false,
         message: error.message,

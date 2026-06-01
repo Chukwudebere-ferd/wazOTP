@@ -2,14 +2,14 @@
   "name": "wazotp",
   "version": "1.0.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": "22.x"
   },
   "description": "",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
     "dev": "node --watch src/app.js",
-    "build": "echo 'Build complete'",
+    "build": "node -e \"console.log('Build complete')\"",
     "test": "jest"
   },
   "repository": {
