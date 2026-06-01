@@ -1,9 +1,3 @@
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion,
-} = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const fs = require('fs');
 const path = require('path');
@@ -11,6 +5,16 @@ const pino = require('pino');
 const db = require('../lib/db');
 
 const { useDbAuthState } = require('../lib/whatsapp-auth');
+
+let baileysModulePromise;
+
+async function loadBaileys() {
+  if (!baileysModulePromise) {
+    baileysModulePromise = import('@whiskeysockets/baileys');
+  }
+
+  return baileysModulePromise;
+}
 
 class WhatsAppService {
   constructor() {
@@ -105,15 +109,17 @@ class WhatsAppService {
       return { statusCode: null, reason: 'unknown' };
     }
 
+    const disconnectReason = this.disconnectReason;
+
     if (lastDisconnect.error instanceof Boom) {
       const statusCode = lastDisconnect.error.output.statusCode;
-      const reasonName = Object.entries(DisconnectReason).find(([, code]) => code === statusCode)?.[0] || 'unknown';
+      const reasonName = Object.entries(disconnectReason || {}).find(([, code]) => code === statusCode)?.[0] || 'unknown';
       return { statusCode, reason: reasonName };
     }
 
     if (lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode) {
       const statusCode = lastDisconnect.error.output.statusCode;
-      const reasonName = Object.entries(DisconnectReason).find(([, code]) => code === statusCode)?.[0] || 'unknown';
+      const reasonName = Object.entries(disconnectReason || {}).find(([, code]) => code === statusCode)?.[0] || 'unknown';
       return { statusCode, reason: reasonName };
     }
 
@@ -147,6 +153,13 @@ class WhatsAppService {
   }
 
   async initializeSocket(userId, sessionKey, options = {}) {
+    const {
+      default: makeWASocket,
+      DisconnectReason,
+      fetchLatestBaileysVersion,
+    } = await loadBaileys();
+    this.disconnectReason = DisconnectReason;
+
     const existing = this.getTrackedSession(sessionKey);
     if (existing?.socket) {
       try {
@@ -330,6 +343,8 @@ class WhatsAppService {
   }
 
   async sendMessage(userId, phone, message, eventName = 'custom_notification') {
+    await loadBaileys();
+
     const sessionKey = this.buildSessionKey(userId);
     const tracked = this.getTrackedSession(sessionKey);
     const session = await this.ensureSessionRecord(userId, sessionKey);
