@@ -5,21 +5,39 @@ let schemaReady = false;
 let lastSchemaError = null;
 
 function getDbConfig() {
+  const enableSsl = String(
+    process.env.DB_ENABLE_SSL
+      || process.env.DATABASE_ENABLE_SSL
+      || '',
+  ).toLowerCase() === 'true';
+
   return {
-    host: process.env.DB_HOST,
+    host: process.env.DB_HOST || process.env.DATABASE_HOST,
     port: Number(process.env.DB_PORT || 3306),
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+    user: process.env.DB_USER || process.env.DB_USERNAME || process.env.DATABASE_USER,
+    password: process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD,
+    database: process.env.DB_NAME || process.env.DB_DATABASE || process.env.DATABASE_NAME,
     waitForConnections: true,
     connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || 10),
     queueLimit: 0,
+    ssl: enableSsl
+      ? {
+          minVersion: 'TLSv1.2',
+          rejectUnauthorized: true,
+        }
+      : undefined,
   };
 }
 
 function validateDbConfig() {
-  const requiredVars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
-  const missingVars = requiredVars.filter((key) => !process.env[key]);
+  const resolvedConfig = getDbConfig();
+  const requiredVars = [
+    ['DB_HOST', resolvedConfig.host],
+    ['DB_USER', resolvedConfig.user],
+    ['DB_PASSWORD', resolvedConfig.password],
+    ['DB_NAME', resolvedConfig.database],
+  ];
+  const missingVars = requiredVars.filter(([, value]) => !value).map(([key]) => key);
 
   if (missingVars.length > 0) {
     throw new Error(`Missing required database environment variables: ${missingVars.join(', ')}`);

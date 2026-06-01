@@ -5,17 +5,32 @@ const firebaseConfig = require('../lib/firebase-config');
 async function dashboardRoutes(fastify) {
   fastify.get('/dashboard', async (_, reply) => {
     const html = fs.readFileSync(path.join(__dirname, '../views/dashboard.html'), 'utf8');
-    reply.type('text/html').send(html);
+    reply
+      .header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+      .header('Pragma', 'no-cache')
+      .header('Expires', '0')
+      .type('text/html')
+      .send(html);
   });
 
   fastify.get('/dashboard.css', async (_, reply) => {
     const css = fs.readFileSync(path.join(__dirname, '../views/dashboard.css'), 'utf8');
-    reply.type('text/css').send(css);
+    reply
+      .header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+      .header('Pragma', 'no-cache')
+      .header('Expires', '0')
+      .type('text/css')
+      .send(css);
   });
 
   fastify.get('/dashboard.js', async (_, reply) => {
     const js = fs.readFileSync(path.join(__dirname, '../views/dashboard.js'), 'utf8');
-    reply.type('application/javascript').send(js);
+    reply
+      .header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+      .header('Pragma', 'no-cache')
+      .header('Expires', '0')
+      .type('application/javascript')
+      .send(js);
   });
 
   fastify.get('/v1/dashboard/firebase-config', async () => ({
