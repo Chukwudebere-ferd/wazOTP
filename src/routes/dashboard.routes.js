@@ -23,8 +23,8 @@ async function dashboardRoutes(fastify) {
       .send(css);
   });
 
-  fastify.get('/dashboard.js', async (_, reply) => {
-    const js = fs.readFileSync(path.join(__dirname, '../views/dashboard.js'), 'utf8');
+  fastify.get('/dashboard-client.js', async (_, reply) => {
+    const js = fs.readFileSync(path.join(__dirname, '../views/dashboard-client.txt'), 'utf8');
     reply
       .header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
       .header('Pragma', 'no-cache')
