@@ -282,6 +282,49 @@ payload = {
 response = requests.post(url, json=payload, headers=headers)
 print(response.json())</code></pre>
       </div>
+
+      <h3>3. Retrieve OTP History</h3>
+      <div class="endpoint-meta">
+        <span class="method post">POST</span>
+        <span class="url">/v1/otp/retrieve</span>
+      </div>
+      <p style="font-size: 0.9375rem; margin-bottom: 12px;">Query your OTP records with filters, field selection, sorting, and pagination. OTP codes are masked by default for security.</p>
+
+      <div class="code-block" style="margin-bottom: 16px;">
+        <div class="code-header">
+          <div class="code-lang">cURL</div>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><code>curl -X POST https://wazotp.pxxl.pro/v1/otp/retrieve \
+  -H "Authorization: Bearer sk_live_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filters": {
+      "status": "verified",
+      "date_from": "2026-01-01T00:00:00Z"
+    },
+    "fields": ["id", "phone", "status", "created_at"],
+    "pagination": { "page": 1, "limit": 20 },
+    "sort": { "by": "created_at", "order": "desc" }
+  }'</code></pre>
+      </div>
+
+      <div class="info-box" style="border-left: 4px solid var(--wa-primary); background: rgba(0, 168, 132, 0.05);">
+        <h4 style="margin-bottom: 8px; color: var(--wa-primary);">Filter Options</h4>
+        <p style="font-size: 0.875rem; margin-bottom: 0;">
+          &bull; <strong>status</strong>: <code>verified</code>, <code>unverified</code>, <code>expired</code>, <code>pending</code>, or <code>all</code>
+          <br/>
+          &bull; <strong>phone</strong>: Filter by recipient phone number
+          <br/>
+          &bull; <strong>date_from / date_to</strong>: Filter by creation date range (ISO 8601)
+          <br/>
+          &bull; <strong>fields</strong>: Choose response columns (<code>id</code>, <code>phone</code>, <code>code</code>, <code>status</code>, <code>created_at</code>, <code>expired_at</code>, <code>verified_at</code>)
+          <br/>
+          &bull; <strong>pagination</strong>: <code>page</code> (default 1), <code>limit</code> (default 20, max 100)
+          <br/>
+          &bull; <strong>sort</strong>: <code>by</code> (<code>created_at</code>, <code>phone</code>, <code>expired_at</code>), <code>order</code> (<code>asc</code>, <code>desc</code>)
+        </p>
+      </div>
     </section>
 
     <section id="sessions" class="doc-section">

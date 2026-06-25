@@ -4,6 +4,7 @@ import {
   createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -47,6 +48,15 @@ const elements = {
   qrHint: document.getElementById("qrHint"),
   copyApiKeyButton: document.getElementById("copyApiKeyButton"),
   accountNavGroup: document.getElementById("accountNavGroup"),
+  forgotPasswordLink: document.getElementById("forgotPasswordLink"),
+  forgotPasswordPanel: document.getElementById("forgotPasswordPanel"),
+  forgotPasswordForm: document.getElementById("forgotPasswordForm"),
+  forgotEmailInput: document.getElementById("forgotEmailInput"),
+  sendResetButton: document.getElementById("sendResetButton"),
+  backToSignInBtn: document.getElementById("backToSignInBtn"),
+  backToSignInFromReset: document.getElementById("backToSignInFromReset"),
+  resetSuccessPanel: document.getElementById("resetSuccessPanel"),
+  resetSentEmail: document.getElementById("resetSentEmail"),
 };
 
 function setHeroStatus(message) {
@@ -119,8 +129,29 @@ function formatDate(value) {
 
 function showAuthPanel() {
   elements.authPanel.classList.remove("hidden");
+  elements.forgotPasswordPanel.classList.add("hidden");
+  elements.resetSuccessPanel.classList.add("hidden");
   elements.controlPanel.classList.add("hidden");
   if (elements.accountNavGroup) elements.accountNavGroup.classList.add("hidden");
+}
+
+function showForgotPassword() {
+  elements.authPanel.classList.add("hidden");
+  elements.forgotPasswordPanel.classList.remove("hidden");
+  elements.resetSuccessPanel.classList.add("hidden");
+  if (elements.forgotEmailInput) {
+    elements.forgotEmailInput.value = elements.emailInput.value || "";
+    elements.forgotEmailInput.focus();
+  }
+}
+
+function showResetSuccess(email) {
+  elements.authPanel.classList.add("hidden");
+  elements.forgotPasswordPanel.classList.add("hidden");
+  elements.resetSuccessPanel.classList.remove("hidden");
+  if (elements.resetSentEmail) {
+    elements.resetSentEmail.textContent = `Sent to ${email}`;
+  }
 }
 
 function showControlPanel() {
@@ -260,6 +291,127 @@ async function handleAuthenticatedUser(user) {
   showControlPanel();
   await refreshSessionStatus();
   startPolling();
+  refreshOtpStats().catch(() => {});
+  fetchOtpHistory().catch(() => {});
+}
+
+async function apikeyFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${state.apiKey}`);
+
+  const response = await fetch(url, { ...options, headers });
+  const payload = await response.json();
+
+  if (!response.ok || payload.success === false) {
+    throw new Error(payload.message || `Request failed: ${response.status}`);
+  }
+
+  return payload;
+}
+
+function maskCode(code) {
+  if (!code) return "••••••";
+  return code.substring(0, 2) + "••••";
+}
+
+function getBadgeClass(status) {
+  switch (status) {
+    case "verified": return "badge-verified";
+    case "pending": return "badge-pending";
+    case "expired": return "badge-expired";
+    default: return "badge-unverified";
+  }
+}
+
+function formatTimestamp(value) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString();
+}
+
+async function fetchOtpHistory() {
+  const tbody = document.getElementById("otpTableBody");
+  if (!tbody) return;
+
+  try {
+    const result = await apikeyFetch("/v1/otp/retrieve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fields: ["id", "phone", "code", "status", "created_at", "expired_at"],
+        pagination: { page: 1, limit: 20 },
+        sort: { by: "created_at", order: "desc" },
+      }),
+    });
+
+    const rows = result.data || [];
+
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="table-empty">No OTPs yet — send one to get started.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows
+      .map(
+        (row) => `
+      <tr>
+        <td><code>${row.phone || "-"}</code></td>
+        <td><code>${maskCode(row.code)}</code></td>
+        <td><span class="badge ${getBadgeClass(row.status)}">${row.status}</span></td>
+        <td>${formatTimestamp(row.created_at)}</td>
+        <td>${formatTimestamp(row.expired_at)}</td>
+      </tr>`,
+      )
+      .join("");
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="5" class="table-empty">Failed to load OTP history.</td></tr>`;
+  }
+}
+
+async function refreshOtpStats() {
+  const totalEl = document.getElementById("otpTotalCount");
+  const verifiedEl = document.getElementById("otpVerifiedCount");
+  const pendingEl = document.getElementById("otpPendingCount");
+  const expiredEl = document.getElementById("otpExpiredCount");
+  if (!totalEl) return;
+
+  try {
+    const [allResult, verifiedResult, pendingResult, expiredResult] = await Promise.all([
+      apikeyFetch("/v1/otp/retrieve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pagination: { page: 1, limit: 1 } }),
+      }),
+      apikeyFetch("/v1/otp/retrieve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filters: { status: "verified" }, pagination: { page: 1, limit: 1 } }),
+      }),
+      apikeyFetch("/v1/otp/retrieve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filters: { status: "pending" }, pagination: { page: 1, limit: 1 } }),
+      }),
+      apikeyFetch("/v1/otp/retrieve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filters: { status: "expired" }, pagination: { page: 1, limit: 1 } }),
+      }),
+    ]);
+
+    totalEl.textContent = allResult.pagination.total;
+    verifiedEl.textContent = verifiedResult.pagination.total;
+    pendingEl.textContent = pendingResult.pagination.total;
+    expiredEl.textContent = expiredResult.pagination.total;
+
+    [totalEl, verifiedEl, pendingEl, expiredEl].forEach((el) => el.classList.remove("shimmer"));
+  } catch {
+    totalEl.textContent = "-";
+    verifiedEl.textContent = "-";
+    pendingEl.textContent = "-";
+    expiredEl.textContent = "-";
+  }
 }
 
 async function initializeDashboard() {
@@ -372,6 +524,44 @@ function bindEvents() {
     }
   });
 
+  if (elements.forgotPasswordLink) {
+    elements.forgotPasswordLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      showForgotPassword();
+    });
+  }
+
+  if (elements.backToSignInBtn) {
+    elements.backToSignInBtn.addEventListener("click", () => {
+      showAuthPanel();
+    });
+  }
+
+  if (elements.backToSignInFromReset) {
+    elements.backToSignInFromReset.addEventListener("click", () => {
+      showAuthPanel();
+    });
+  }
+
+  if (elements.forgotPasswordForm) {
+    elements.forgotPasswordForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = elements.forgotEmailInput.value.trim();
+      if (!email) return;
+
+      setBusy(true, elements.sendResetButton);
+
+      try {
+        await sendPasswordResetEmail(state.auth, email);
+        showResetSuccess(email);
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        setBusy(false, elements.sendResetButton);
+      }
+    });
+  }
+
   elements.logoutButton.addEventListener("click", async () => {
     setBusy(true, elements.logoutButton);
 
@@ -410,6 +600,40 @@ function bindEvents() {
       setBusy(false, elements.relinkButton);
     }
   });
+
+  const refreshOtpBtn = document.getElementById("refreshOtpBtn");
+  if (refreshOtpBtn) {
+    refreshOtpBtn.addEventListener("click", async () => {
+      refreshOtpBtn.disabled = true;
+      refreshOtpBtn.innerHTML = `<span class="spinner" style="margin:0"></span>`;
+      try {
+        await fetchOtpHistory();
+      } catch {
+        showToast("Failed to refresh OTP history");
+      } finally {
+        refreshOtpBtn.disabled = false;
+        refreshOtpBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; margin-right: 6px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh`;
+      }
+    });
+  }
+
+  const sidebarToggle = document.getElementById("sidebarToggle");
+  const sidebarOverlay = document.getElementById("sidebarOverlay");
+  const sidebar = document.querySelector(".sidebar");
+  if (sidebarToggle && sidebar && sidebarOverlay) {
+    function closeSidebar() {
+      sidebar.classList.remove("open");
+      sidebarOverlay.classList.remove("open");
+    }
+    sidebarToggle.addEventListener("click", () => {
+      sidebar.classList.toggle("open");
+      sidebarOverlay.classList.toggle("open");
+    });
+    sidebarOverlay.addEventListener("click", closeSidebar);
+    document.querySelectorAll(".sidebar .nav-link").forEach((link) => {
+      link.addEventListener("click", closeSidebar);
+    });
+  }
 }
 
 initializeDashboard().catch((error) => {

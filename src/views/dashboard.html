@@ -7,6 +7,11 @@
   <link rel="stylesheet" href="dashboard.css?v=20260601b" />
 </head>
 <body class="with-sidebar">
+  <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Toggle sidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
   <aside class="sidebar">
     <a href="/dashboard" class="logo-area">
       <div class="logo-icon">W</div>
@@ -45,57 +50,196 @@
       <p>Manage your WhatsApp session, retrieve your API key, and monitor your service health.</p>
 
       <!-- Auth Section -->
-      <div id="authPanel" class="glass-card" style="max-width: 500px; margin: 0 auto;">
-        <h2 style="margin-bottom: 8px;">Welcome Back</h2>
-        <p style="font-size: 0.875rem; margin-bottom: 32px;">Please sign in to access your developer console.</p>
+      <div id="authPanel" class="auth-split">
+        <div class="auth-hero">
+          <div class="auth-hero-content">
+            <div class="auth-hero-icon">W</div>
+            <h2>WhatsApp OTP Gateway</h2>
+            <p class="auth-hero-tagline">Deliver verification codes and notifications directly to your users via WhatsApp — no SDKs, no WebSockets, just standard HTTP requests.</p>
+            <div class="auth-hero-features">
+              <div class="auth-hero-feature">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                <span>6-digit OTP generation &amp; verification</span>
+              </div>
+              <div class="auth-hero-feature">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>End-to-end encrypted WhatsApp delivery</span>
+              </div>
+              <div class="auth-hero-feature">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span>Secure API key authentication</span>
+              </div>
+              <div class="auth-hero-feature">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <span>Real-time delivery analytics &amp; logs</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="auth-form-col">
+          <div class="auth-brand">
+            <h2>Welcome Back</h2>
+            <p>Sign in to your developer console.</p>
+          </div>
 
-        <form id="emailForm" class="stack">
-          <label>
-            Email Address
-            <input id="emailInput" type="email" placeholder="you@example.com" required />
-          </label>
-          <label>
-            Password
-            <div class="password-wrapper">
-              <input id="passwordInput" type="password" placeholder="••••••••" required />
-              <button type="button" id="togglePassword" class="password-toggle">
-                <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                  <circle cx="12" cy="12" r="3"></circle>
-                </svg>
+          <form id="emailForm" class="stack">
+            <label>
+              Email Address
+              <input id="emailInput" type="email" placeholder="you@example.com" required />
+            </label>
+            <label>
+              Password
+              <div class="password-wrapper">
+                <input id="passwordInput" type="password" placeholder="••••••••" required />
+                <button type="button" id="togglePassword" class="password-toggle">
+                  <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+            </label>
+            <div style="display: flex; justify-content: flex-end; margin-top: -12px;">
+              <button type="button" id="forgotPasswordLink" class="link-btn">Forgot password?</button>
+            </div>
+            <div class="button-row" style="margin-top: 4px;">
+              <button type="submit" id="signinButton" class="button primary" style="flex: 1;">Sign In</button>
+              <button type="button" id="signupButton" class="button secondary" style="flex: 1;">Create Account</button>
+            </div>
+          </form>
+
+          <div class="auth-divider">
+            <span>or continue with</span>
+          </div>
+
+          <button type="button" id="googleButton" class="button google">
+            <svg style="width: 18px; margin-right: 12px;" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Google
+          </button>
+        </div>
+      </div>
+
+      <!-- Forgot Password Panel -->
+      <div id="forgotPasswordPanel" class="hidden">
+        <div class="auth-split">
+          <div class="auth-hero">
+            <div class="auth-hero-content">
+              <div class="auth-hero-icon">W</div>
+              <h2>Reset Your Password</h2>
+              <p class="auth-hero-tagline">Enter the email address associated with your account and we'll send you a link to reset your password.</p>
+            </div>
+          </div>
+          <div class="auth-form-col">
+            <div class="auth-brand">
+              <h2>Forgot Password</h2>
+              <p>No worries, it happens.</p>
+            </div>
+
+            <form id="forgotPasswordForm" class="stack">
+              <label>
+                Email Address
+                <input id="forgotEmailInput" type="email" placeholder="you@example.com" required />
+              </label>
+              <div class="button-row" style="margin-top: 4px;">
+                <button type="submit" id="sendResetButton" class="button primary" style="flex: 1;">Send Reset Link</button>
+              </div>
+            </form>
+
+            <div class="auth-divider" style="margin: 20px 0 0;">
+              <span></span>
+            </div>
+
+            <button type="button" id="backToSignInBtn" class="button ghost" style="width: 100%; margin-top: 16px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; margin-right: 8px;"><polyline points="15 18 9 12 15 6"/></svg>
+              Back to Sign In
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reset Success Panel -->
+      <div id="resetSuccessPanel" class="hidden">
+        <div class="auth-split">
+          <div class="auth-hero">
+            <div class="auth-hero-content">
+              <div class="auth-hero-icon">W</div>
+              <h2>Check Your Email</h2>
+              <p class="auth-hero-tagline">We've sent a password reset link to your email address. Please check your inbox and follow the instructions.</p>
+            </div>
+          </div>
+          <div class="auth-form-col">
+            <div class="auth-brand" style="text-align: center;">
+              <div style="width: 64px; height: 64px; background: rgba(0, 168, 132, 0.12); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--wa-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 28px; height: 28px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              </div>
+              <h2 style="margin-bottom: 8px;">Email Sent</h2>
+              <p id="resetSentEmail" style="font-size: 0.9375rem; color: var(--wa-text-muted); margin-bottom: 4px;"></p>
+              <p style="font-size: 0.875rem; color: var(--wa-text-muted);">Didn't receive it? Be sure to check your <strong>spam</strong> or <strong>promotions</strong> folder.</p>
+            </div>
+
+            <div style="margin-top: 24px;">
+              <button type="button" id="backToSignInFromReset" class="button ghost" style="width: 100%;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; margin-right: 8px;"><polyline points="15 18 9 12 15 6"/></svg>
+                Back to Sign In
               </button>
             </div>
-          </label>
-          <div class="button-row" style="margin-top: 12px;">
-            <button type="submit" id="signinButton" class="button primary" style="flex: 1;">Sign In</button>
-            <button type="button" id="signupButton" class="button secondary" style="flex: 1;">Sign Up</button>
           </div>
-        </form>
-
-        <div class="auth-divider" style="margin: 32px 0;">
-          <span>or</span>
         </div>
-
-        <button type="button" id="googleButton" class="button google">
-          <svg style="width: 18px; margin-right: 12px;" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-          Continue with Google
-        </button>
       </div>
 
       <!-- Control Panel -->
       <div id="controlPanel" class="hidden">
         <div class="stats-grid">
-          <div class="stat-item glass-card">
+          <div class="stat-item">
             <div class="stat-label">Signed in as</div>
             <div class="stat-value" id="accountEmail" style="font-size: 1.125rem;">-</div>
           </div>
-          <div class="stat-item glass-card">
+          <div class="stat-item">
             <div class="stat-label">API Key</div>
             <div class="api-key-container">
-              <div class="code blurred" id="apiKeyValue" style="font-size: 1rem;">-</div>
+              <div class="code blurred" id="apiKeyValue" style="font-size: 0.9rem;">-</div>
               <button type="button" id="copyApiKeyButton" class="icon-button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
               </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="insight-grid" id="insightGrid">
+          <div class="insight-card">
+            <div class="insight-icon insight-icon-send">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <div class="insight-body">
+              <div class="insight-value" id="otpTotalCount">-</div>
+              <div class="insight-label">OTPs Sent</div>
+            </div>
+          </div>
+          <div class="insight-card">
+            <div class="insight-icon insight-icon-check">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="insight-body">
+              <div class="insight-value" id="otpVerifiedCount">-</div>
+              <div class="insight-label">Verified</div>
+            </div>
+          </div>
+          <div class="insight-card">
+            <div class="insight-icon insight-icon-clock">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="insight-body">
+              <div class="insight-value" id="otpPendingCount">-</div>
+              <div class="insight-label">Pending</div>
+            </div>
+          </div>
+          <div class="insight-card">
+            <div class="insight-icon insight-icon-expired">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            </div>
+            <div class="insight-body">
+              <div class="insight-value" id="otpExpiredCount">-</div>
+              <div class="insight-label">Expired</div>
             </div>
           </div>
         </div>
@@ -135,6 +279,39 @@
             <div id="qrHint" class="hint" style="margin-top: 16px; text-align: center;">
               Polling server for connection status...
             </div>
+          </div>
+        </div>
+
+        <!-- OTP History Section -->
+        <div class="section-group">
+          <div class="section-group-header">
+            <h3>OTP History</h3>
+            <button type="button" id="refreshOtpBtn" class="button ghost" style="padding: 6px 16px; font-size: 0.8125rem;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; margin-right: 6px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh
+            </button>
+          </div>
+          <div class="table-container">
+            <table class="data-table" id="otpTable">
+              <thead>
+                <tr>
+                  <th>Phone</th>
+                  <th>Code</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Expires</th>
+                </tr>
+              </thead>
+              <tbody id="otpTableBody">
+                <tr>
+                  <td colspan="5" class="table-empty">
+                    <div class="skeleton-row"><span class="skeleton-line" style="width: 60%;"></span></div>
+                    <div class="skeleton-row"><span class="skeleton-line" style="width: 40%;"></span></div>
+                    <div class="skeleton-row"><span class="skeleton-line" style="width: 50%;"></span></div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

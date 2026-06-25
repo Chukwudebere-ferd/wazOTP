@@ -4,6 +4,7 @@ import {
   createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -47,6 +48,15 @@ const elements = {
   qrHint: document.getElementById("qrHint"),
   copyApiKeyButton: document.getElementById("copyApiKeyButton"),
   accountNavGroup: document.getElementById("accountNavGroup"),
+  forgotPasswordLink: document.getElementById("forgotPasswordLink"),
+  forgotPasswordPanel: document.getElementById("forgotPasswordPanel"),
+  forgotPasswordForm: document.getElementById("forgotPasswordForm"),
+  forgotEmailInput: document.getElementById("forgotEmailInput"),
+  sendResetButton: document.getElementById("sendResetButton"),
+  backToSignInBtn: document.getElementById("backToSignInBtn"),
+  backToSignInFromReset: document.getElementById("backToSignInFromReset"),
+  resetSuccessPanel: document.getElementById("resetSuccessPanel"),
+  resetSentEmail: document.getElementById("resetSentEmail"),
 };
 
 function setHeroStatus(message) {
@@ -91,13 +101,46 @@ function createToastContainer() {
   return container;
 }
 
+const firebaseErrors = {
+  "auth/invalid-email": "Invalid email format. Please enter a valid email address.",
+  "auth/user-disabled": "This account has been disabled. Contact support for help.",
+  "auth/user-not-found": "No account found with this email address.",
+  "auth/wrong-password": "Incorrect password. Please try again.",
+  "auth/invalid-credential": "Invalid email or password. Please check your credentials.",
+  "auth/email-already-in-use": "An account with this email already exists. Try signing in.",
+  "auth/weak-password": "Password is too weak. Use at least 6 characters.",
+  "auth/operation-not-allowed": "This sign-in method is not enabled. Contact support.",
+  "auth/too-many-requests": "Too many attempts. Please wait a moment and try again.",
+  "auth/network-request-failed": "Network error. Check your internet connection.",
+  "auth/popup-closed-by-user": "Sign-in cancelled. Try again if you'd like to continue.",
+  "auth/popup-blocked": "Pop-up was blocked. Allow pop-ups for this site and try again.",
+  "auth/cancelled-popup-request": "Sign-in was cancelled. Please try again.",
+  "auth/unauthorized-domain": "This domain is not authorized for sign-in. Contact support.",
+  "auth/invalid-action-code": "This reset link is invalid or expired. Request a new one.",
+  "auth/expired-action-code": "This reset link has expired. Request a new one.",
+};
+
+function friendlyFirebaseError(error) {
+  const code = error?.code;
+  if (code && firebaseErrors[code]) {
+    return firebaseErrors[code];
+  }
+  if (error?.message) {
+    const match = error.message.match(/auth\/[\w-]+/);
+    if (match && firebaseErrors[match[0]]) {
+      return firebaseErrors[match[0]];
+    }
+  }
+  return error?.message || "An unexpected error occurred. Please try again.";
+}
+
 function showToast(message, type = "error") {
   const container = createToastContainer();
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
   toast.innerHTML = `<span>${message}</span>`;
   container.appendChild(toast);
-  
+
   setTimeout(() => {
     toast.style.animation = "fadeOut 0.3s ease forwards";
     setTimeout(() => toast.remove(), 300);
@@ -119,8 +162,29 @@ function formatDate(value) {
 
 function showAuthPanel() {
   elements.authPanel.classList.remove("hidden");
+  elements.forgotPasswordPanel.classList.add("hidden");
+  elements.resetSuccessPanel.classList.add("hidden");
   elements.controlPanel.classList.add("hidden");
   if (elements.accountNavGroup) elements.accountNavGroup.classList.add("hidden");
+}
+
+function showForgotPassword() {
+  elements.authPanel.classList.add("hidden");
+  elements.forgotPasswordPanel.classList.remove("hidden");
+  elements.resetSuccessPanel.classList.add("hidden");
+  if (elements.forgotEmailInput) {
+    elements.forgotEmailInput.value = elements.emailInput.value || "";
+    elements.forgotEmailInput.focus();
+  }
+}
+
+function showResetSuccess(email) {
+  elements.authPanel.classList.add("hidden");
+  elements.forgotPasswordPanel.classList.add("hidden");
+  elements.resetSuccessPanel.classList.remove("hidden");
+  if (elements.resetSentEmail) {
+    elements.resetSentEmail.textContent = `Sent to ${email}`;
+  }
 }
 
 function showControlPanel() {
@@ -260,6 +324,127 @@ async function handleAuthenticatedUser(user) {
   showControlPanel();
   await refreshSessionStatus();
   startPolling();
+  refreshOtpStats().catch(() => {});
+  fetchOtpHistory().catch(() => {});
+}
+
+async function apikeyFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${state.apiKey}`);
+
+  const response = await fetch(url, { ...options, headers });
+  const payload = await response.json();
+
+  if (!response.ok || payload.success === false) {
+    throw new Error(payload.message || `Request failed: ${response.status}`);
+  }
+
+  return payload;
+}
+
+function maskCode(code) {
+  if (!code) return "••••••";
+  return code.substring(0, 2) + "••••";
+}
+
+function getBadgeClass(status) {
+  switch (status) {
+    case "verified": return "badge-verified";
+    case "pending": return "badge-pending";
+    case "expired": return "badge-expired";
+    default: return "badge-unverified";
+  }
+}
+
+function formatTimestamp(value) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString();
+}
+
+async function fetchOtpHistory() {
+  const tbody = document.getElementById("otpTableBody");
+  if (!tbody) return;
+
+  try {
+    const result = await apikeyFetch("/v1/otp/retrieve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fields: ["id", "phone", "code", "status", "created_at", "expired_at"],
+        pagination: { page: 1, limit: 20 },
+        sort: { by: "created_at", order: "desc" },
+      }),
+    });
+
+    const rows = result.data || [];
+
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="table-empty">No OTPs yet — send one to get started.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows
+      .map(
+        (row) => `
+      <tr>
+        <td><code>${row.phone || "-"}</code></td>
+        <td><code>${maskCode(row.code)}</code></td>
+        <td><span class="badge ${getBadgeClass(row.status)}">${row.status}</span></td>
+        <td>${formatTimestamp(row.created_at)}</td>
+        <td>${formatTimestamp(row.expired_at)}</td>
+      </tr>`,
+      )
+      .join("");
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="5" class="table-empty">Failed to load OTP history.</td></tr>`;
+  }
+}
+
+async function refreshOtpStats() {
+  const totalEl = document.getElementById("otpTotalCount");
+  const verifiedEl = document.getElementById("otpVerifiedCount");
+  const pendingEl = document.getElementById("otpPendingCount");
+  const expiredEl = document.getElementById("otpExpiredCount");
+  if (!totalEl) return;
+
+  try {
+    const [allResult, verifiedResult, pendingResult, expiredResult] = await Promise.all([
+      apikeyFetch("/v1/otp/retrieve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pagination: { page: 1, limit: 1 } }),
+      }),
+      apikeyFetch("/v1/otp/retrieve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filters: { status: "verified" }, pagination: { page: 1, limit: 1 } }),
+      }),
+      apikeyFetch("/v1/otp/retrieve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filters: { status: "pending" }, pagination: { page: 1, limit: 1 } }),
+      }),
+      apikeyFetch("/v1/otp/retrieve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filters: { status: "expired" }, pagination: { page: 1, limit: 1 } }),
+      }),
+    ]);
+
+    totalEl.textContent = allResult.pagination.total;
+    verifiedEl.textContent = verifiedResult.pagination.total;
+    pendingEl.textContent = pendingResult.pagination.total;
+    expiredEl.textContent = expiredResult.pagination.total;
+
+    [totalEl, verifiedEl, pendingEl, expiredEl].forEach((el) => el.classList.remove("shimmer"));
+  } catch {
+    totalEl.textContent = "-";
+    verifiedEl.textContent = "-";
+    pendingEl.textContent = "-";
+    expiredEl.textContent = "-";
+  }
 }
 
 async function initializeDashboard() {
@@ -301,7 +486,7 @@ function bindEvents() {
       try {
         await navigator.clipboard.writeText(state.apiKey);
         showToast("API Key copied to clipboard", "success");
-      } catch (err) {
+      } catch {
         showToast("Failed to copy API key");
       }
     });
@@ -311,7 +496,7 @@ function bindEvents() {
     elements.togglePassword.addEventListener("click", () => {
       const type = elements.passwordInput.getAttribute("type") === "password" ? "text" : "password";
       elements.passwordInput.setAttribute("type", type);
-      
+
       if (type === "text") {
         elements.eyeIcon.innerHTML = `
           <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
@@ -337,7 +522,7 @@ function bindEvents() {
         elements.passwordInput.value,
       );
     } catch (error) {
-      showToast(error.message);
+      showToast(friendlyFirebaseError(error));
     } finally {
       setBusy(false, elements.signinButton);
     }
@@ -354,7 +539,7 @@ function bindEvents() {
       );
       showToast("Account created successfully", "success");
     } catch (error) {
-      showToast(error.message);
+      showToast(friendlyFirebaseError(error));
     } finally {
       setBusy(false, elements.signupButton);
     }
@@ -366,11 +551,49 @@ function bindEvents() {
     try {
       await signInWithPopup(state.auth, new GoogleAuthProvider());
     } catch (error) {
-      showToast(error.message);
+      showToast(friendlyFirebaseError(error));
     } finally {
       setBusy(false, elements.googleButton);
     }
   });
+
+  if (elements.forgotPasswordLink) {
+    elements.forgotPasswordLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      showForgotPassword();
+    });
+  }
+
+  if (elements.backToSignInBtn) {
+    elements.backToSignInBtn.addEventListener("click", () => {
+      showAuthPanel();
+    });
+  }
+
+  if (elements.backToSignInFromReset) {
+    elements.backToSignInFromReset.addEventListener("click", () => {
+      showAuthPanel();
+    });
+  }
+
+  if (elements.forgotPasswordForm) {
+    elements.forgotPasswordForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = elements.forgotEmailInput.value.trim();
+      if (!email) return;
+
+      setBusy(true, elements.sendResetButton);
+
+      try {
+        await sendPasswordResetEmail(state.auth, email);
+        showResetSuccess(email);
+      } catch (error) {
+        showToast(friendlyFirebaseError(error));
+      } finally {
+        setBusy(false, elements.sendResetButton);
+      }
+    });
+  }
 
   elements.logoutButton.addEventListener("click", async () => {
     setBusy(true, elements.logoutButton);
@@ -379,7 +602,7 @@ function bindEvents() {
       stopPolling();
       await signOut(state.auth);
     } catch (error) {
-      showToast(error.message);
+      showToast(friendlyFirebaseError(error));
     } finally {
       setBusy(false, elements.logoutButton);
     }
@@ -410,82 +633,115 @@ function bindEvents() {
       setBusy(false, elements.relinkButton);
     }
   });
+
+  const refreshOtpBtn = document.getElementById("refreshOtpBtn");
+  if (refreshOtpBtn) {
+    refreshOtpBtn.addEventListener("click", async () => {
+      refreshOtpBtn.disabled = true;
+      refreshOtpBtn.innerHTML = `<span class="spinner" style="margin:0"></span>`;
+      try {
+        await fetchOtpHistory();
+      } catch {
+        showToast("Failed to refresh OTP history");
+      } finally {
+        refreshOtpBtn.disabled = false;
+        refreshOtpBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; margin-right: 6px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh`;
+      }
+    });
+  }
+
+  const sidebarToggle = document.getElementById("sidebarToggle");
+  const sidebarOverlay = document.getElementById("sidebarOverlay");
+  const sidebar = document.querySelector(".sidebar");
+  if (sidebarToggle && sidebar && sidebarOverlay) {
+    function closeSidebar() {
+      sidebar.classList.remove("open");
+      sidebarOverlay.classList.remove("open");
+    }
+    sidebarToggle.addEventListener("click", () => {
+      sidebar.classList.toggle("open");
+      sidebarOverlay.classList.toggle("open");
+    });
+    sidebarOverlay.addEventListener("click", closeSidebar);
+    document.querySelectorAll(".sidebar .nav-link").forEach((link) => {
+      link.addEventListener("click", closeSidebar);
+    });
+  }
 }
 
 initializeDashboard().catch((error) => {
   setHeroStatus(error.message);
 });
 
-// Chatbot Logic
-const chatBtn = document.getElementById('chatWidgetBtn');
-const chatWindow = document.getElementById('chatWindow');
-const closeBtn = document.getElementById('chatCloseBtn');
-const chatInput = document.getElementById('chatInput');
-const sendBtn = document.getElementById('chatSendBtn');
-const chatBody = document.getElementById('chatBody');
+const chatBtn = document.getElementById("chatWidgetBtn");
+const chatWindow = document.getElementById("chatWindow");
+const closeBtn = document.getElementById("chatCloseBtn");
+const chatInput = document.getElementById("chatInput");
+const sendBtn = document.getElementById("chatSendBtn");
+const chatBody = document.getElementById("chatBody");
 
 if (chatBtn && chatWindow) {
-  chatBtn.addEventListener('click', () => {
-    chatWindow.classList.add('open');
-    chatBtn.style.transform = 'scale(0)';
+  chatBtn.addEventListener("click", () => {
+    chatWindow.classList.add("open");
+    chatBtn.style.transform = "scale(0)";
     chatInput.focus();
   });
 
-  closeBtn.addEventListener('click', () => {
-    chatWindow.classList.remove('open');
-    chatBtn.style.transform = 'scale(1)';
+  closeBtn.addEventListener("click", () => {
+    chatWindow.classList.remove("open");
+    chatBtn.style.transform = "scale(1)";
   });
 
-  chatInput.addEventListener('input', () => {
+  chatInput.addEventListener("input", () => {
     sendBtn.disabled = chatInput.value.trim().length === 0;
   });
 
-  chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !sendBtn.disabled) {
+  chatInput.addEventListener("keypress", (event) => {
+    if (event.key === "Enter" && !sendBtn.disabled) {
       sendMessage();
     }
   });
 
-  sendBtn.addEventListener('click', sendMessage);
+  sendBtn.addEventListener("click", sendMessage);
 
   async function sendMessage() {
     const text = chatInput.value.trim();
     if (!text) return;
 
-    appendMessage(text, 'user');
-    chatInput.value = '';
+    appendMessage(text, "user");
+    chatInput.value = "";
     sendBtn.disabled = true;
 
-    const typingId = 'typing-' + Date.now();
+    const typingId = `typing-${Date.now()}`;
     appendTypingIndicator(typingId);
 
     try {
-      const response = await fetch('/v1/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
+      const response = await fetch("/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
       });
 
       const data = await response.json();
       removeElement(typingId);
 
       if (response.ok) {
-        let formattedReply = data.reply
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/`(.*?)`/g, '<code class="code">$1</code>')
-          .replace(/\n/g, '<br/>');
-        appendMessage(formattedReply, 'bot', true);
+        const formattedReply = data.reply
+          .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+          .replace(/`(.*?)`/g, "<code class=\"code\">$1</code>")
+          .replace(/\n/g, "<br/>");
+        appendMessage(formattedReply, "bot", true);
       } else {
-        appendMessage("Sorry, I encountered an error: " + (data.error || "Unknown error"), 'bot');
+        appendMessage(`Sorry, I encountered an error: ${data.error || "Unknown error"}`, "bot");
       }
-    } catch (err) {
+    } catch {
       removeElement(typingId);
-      appendMessage("Network error. Could not reach the server.", 'bot');
+      appendMessage("Network error. Could not reach the server.", "bot");
     }
   }
 
   function appendMessage(text, sender, isHtml = false) {
-    const msgDiv = document.createElement('div');
+    const msgDiv = document.createElement("div");
     msgDiv.className = `chat-message ${sender}`;
     if (isHtml) {
       msgDiv.innerHTML = text;
@@ -497,16 +753,16 @@ if (chatBtn && chatWindow) {
   }
 
   function appendTypingIndicator(id) {
-    const msgDiv = document.createElement('div');
-    msgDiv.className = 'chat-message bot';
+    const msgDiv = document.createElement("div");
+    msgDiv.className = "chat-message bot";
     msgDiv.id = id;
-    msgDiv.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+    msgDiv.innerHTML = "<div class=\"typing-indicator\"><div class=\"typing-dot\"></div><div class=\"typing-dot\"></div><div class=\"typing-dot\"></div></div>";
     chatBody.appendChild(msgDiv);
     chatBody.scrollTop = chatBody.scrollHeight;
   }
 
   function removeElement(id) {
-    const el = document.getElementById(id);
-    if (el) el.remove();
+    const element = document.getElementById(id);
+    if (element) element.remove();
   }
 }
