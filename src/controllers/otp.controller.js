@@ -27,6 +27,24 @@ class OTPController {
     }
   }
 
+  async retrieveOTPs(request, reply) {
+    const { filters = {}, fields = null, pagination = {}, sort = {} } = request.body || {};
+
+    try {
+      const result = await otpService.retrieveOTPs(
+        request.userId,
+        filters,
+        fields,
+        pagination,
+        sort,
+      );
+      return { success: true, ...result };
+    } catch (error) {
+      request.log.error(error);
+      return reply.status(500).send({ success: false, message: 'Failed to retrieve OTPs' });
+    }
+  }
+
   async verifyOTP(request, reply) {
     const { phone, otp } = request.body;
 

@@ -7,6 +7,7 @@ async function otpRoutes(fastify, options) {
 
   fastify.post('/v1/otp/send', otpController.sendOTP);
   fastify.post('/v1/otp/verify', otpController.verifyOTP);
+  fastify.post('/v1/otp/retrieve', otpController.retrieveOTPs);
 }
 
 module.exports = otpRoutes;
