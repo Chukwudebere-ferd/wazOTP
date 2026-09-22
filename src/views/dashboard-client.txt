@@ -101,10 +101,44 @@ function createToastContainer() {
   return container;
 }
 
+const firebaseErrors = {
+  "auth/invalid-email": "Invalid email format. Please enter a valid email address.",
+  "auth/user-disabled": "This account has been disabled. Contact support for help.",
+  "auth/user-not-found": "No account found with this email address.",
+  "auth/wrong-password": "Incorrect password. Please try again.",
+  "auth/invalid-credential": "Invalid email or password. Please check your credentials.",
+  "auth/email-already-in-use": "An account with this email already exists. Try signing in.",
+  "auth/weak-password": "Password is too weak. Use at least 6 characters.",
+  "auth/operation-not-allowed": "This sign-in method is not enabled. Contact support.",
+  "auth/too-many-requests": "Too many attempts. Please wait a moment and try again.",
+  "auth/network-request-failed": "Network error. Check your internet connection.",
+  "auth/popup-closed-by-user": "Sign-in cancelled. Try again if you'd like to continue.",
+  "auth/popup-blocked": "Pop-up was blocked. Allow pop-ups for this site and try again.",
+  "auth/cancelled-popup-request": "Sign-in was cancelled. Please try again.",
+  "auth/unauthorized-domain": "This domain is not authorized for sign-in. Contact support.",
+  "auth/invalid-action-code": "This reset link is invalid or expired. Request a new one.",
+  "auth/expired-action-code": "This reset link has expired. Request a new one.",
+};
+
+function friendlyFirebaseError(error) {
+  const code = error?.code;
+  if (code && firebaseErrors[code]) {
+    return firebaseErrors[code];
+  }
+  if (error?.message) {
+    const match = error.message.match(/auth\/[\w-]+/);
+    if (match && firebaseErrors[match[0]]) {
+      return firebaseErrors[match[0]];
+    }
+  }
+  return error?.message || "An unexpected error occurred. Please try again.";
+}
+
 function showToast(message, type = "error") {
   const container = createToastContainer();
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
+  toast.setAttribute("role", "alert");
   toast.innerHTML = `<span>${message}</span>`;
   container.appendChild(toast);
 
@@ -231,6 +265,7 @@ async function syncDashboardUser() {
 
 function applySessionStatus(session) {
   elements.sessionState.textContent = session.status || "idle";
+  elements.sessionState.dataset.state = session.status || "idle";
   elements.phoneValue.textContent = session.phoneNumber || "-";
   elements.deviceValue.textContent = session.deviceName || "-";
   elements.connectedValue.textContent = formatDate(session.lastConnectedAt);
@@ -489,7 +524,7 @@ function bindEvents() {
         elements.passwordInput.value,
       );
     } catch (error) {
-      showToast(error.message);
+      showToast(friendlyFirebaseError(error));
     } finally {
       setBusy(false, elements.signinButton);
     }
@@ -506,7 +541,7 @@ function bindEvents() {
       );
       showToast("Account created successfully", "success");
     } catch (error) {
-      showToast(error.message);
+      showToast(friendlyFirebaseError(error));
     } finally {
       setBusy(false, elements.signupButton);
     }
@@ -518,7 +553,7 @@ function bindEvents() {
     try {
       await signInWithPopup(state.auth, new GoogleAuthProvider());
     } catch (error) {
-      showToast(error.message);
+      showToast(friendlyFirebaseError(error));
     } finally {
       setBusy(false, elements.googleButton);
     }
@@ -555,7 +590,7 @@ function bindEvents() {
         await sendPasswordResetEmail(state.auth, email);
         showResetSuccess(email);
       } catch (error) {
-        showToast(error.message);
+        showToast(friendlyFirebaseError(error));
       } finally {
         setBusy(false, elements.sendResetButton);
       }
@@ -569,7 +604,7 @@ function bindEvents() {
       stopPolling();
       await signOut(state.auth);
     } catch (error) {
-      showToast(error.message);
+      showToast(friendlyFirebaseError(error));
     } finally {
       setBusy(false, elements.logoutButton);
     }

@@ -138,6 +138,7 @@ function showToast(message, type = "error") {
   const container = createToastContainer();
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
+  toast.setAttribute("role", "alert");
   toast.innerHTML = `<span>${message}</span>`;
   container.appendChild(toast);
 
@@ -264,6 +265,7 @@ async function syncDashboardUser() {
 
 function applySessionStatus(session) {
   elements.sessionState.textContent = session.status || "idle";
+  elements.sessionState.dataset.state = session.status || "idle";
   elements.phoneValue.textContent = session.phoneNumber || "-";
   elements.deviceValue.textContent = session.deviceName || "-";
   elements.connectedValue.textContent = formatDate(session.lastConnectedAt);

@@ -51,11 +51,7 @@ function createApp() {
     });
   });
 
-  fastify.get('/', async () => ({
-    name: 'wazOTP API',
-    version: '1.0.0',
-    status: 'running',
-  }));
+  fastify.get('/', async (_, reply) => reply.redirect('/dashboard'));
 
   fastify.get('/health', async () => ({
     status: 'ok',
