@@ -20,6 +20,8 @@ class WhatsAppService {
   constructor() {
     this.sessions = new Map();
     this.initializers = new Map();
+    this.reconnectTimers = new Map();
+    this.retryCounts = new Map();
     this.baseSessionsDir = path.join(__dirname, '../../sessions');
   }
 
@@ -109,24 +111,81 @@ class WhatsAppService {
       return { statusCode: null, reason: 'unknown' };
     }
 
-    const disconnectReason = this.disconnectReason;
+    const disconnectReason = this.disconnectReason || {};
+
+    const resolveName = (code) => Object.entries(disconnectReason).find(([, c]) => c === code)?.[0] || 'unknown';
 
     if (lastDisconnect.error instanceof Boom) {
-      const statusCode = lastDisconnect.error.output.statusCode;
-      const reasonName = Object.entries(disconnectReason || {}).find(([, code]) => code === statusCode)?.[0] || 'unknown';
-      return { statusCode, reason: reasonName };
+      const statusCode = lastDisconnect.error?.output?.statusCode;
+      return { statusCode: statusCode ?? null, reason: resolveName(statusCode) };
     }
 
-    if (lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode) {
+    if (lastDisconnect.error?.output?.statusCode) {
       const statusCode = lastDisconnect.error.output.statusCode;
-      const reasonName = Object.entries(disconnectReason || {}).find(([, code]) => code === statusCode)?.[0] || 'unknown';
-      return { statusCode, reason: reasonName };
+      return { statusCode, reason: resolveName(statusCode) };
     }
 
+    // Baileys sometimes nests the code differently
+    const nested = lastDisconnect.error?.data?.statusCode
+      ?? lastDisconnect.statusCode
+      ?? null;
     return {
-      statusCode: null,
-      reason: lastDisconnect.error?.message || 'unknown',
+      statusCode: nested,
+      reason: nested !== null ? resolveName(nested) : (lastDisconnect.error?.message || 'unknown'),
     };
+  }
+
+  isFatalDisconnect(meta) {
+    const DisconnectReason = this.disconnectReason || {};
+    const fatalCodes = new Set([
+      DisconnectReason.loggedOut,
+      DisconnectReason.badSession,
+      DisconnectReason.forbidden,
+    ].filter((c) => c !== undefined));
+    if (meta.statusCode !== null && fatalCodes.has(meta.statusCode)) {
+      return true;
+    }
+    // Explicit logout signals from WhatsApp - never auto-retry these
+    const fatalReasons = new Set(['loggedOut', 'badSession', 'forbidden']);
+    return fatalReasons.has(meta.reason);
+  }
+
+  getRetryDelay(attempt) {
+    const backoff = [1500, 3000, 5000, 10000, 15000, 30000];
+    return backoff[Math.min(attempt, backoff.length - 1)];
+  }
+
+  clearReconnectTimer(sessionKey) {
+    const timer = this.reconnectTimers.get(sessionKey);
+    if (timer) {
+      clearTimeout(timer);
+      this.reconnectTimers.delete(sessionKey);
+    }
+  }
+
+  resetRetries(sessionKey) {
+    this.retryCounts.delete(sessionKey);
+    this.clearReconnectTimer(sessionKey);
+  }
+
+  scheduleReconnect(userId, sessionKey, attempt = 0) {
+    this.clearReconnectTimer(sessionKey);
+    this.retryCounts.set(sessionKey, attempt);
+    const delay = this.getRetryDelay(attempt);
+    const timer = setTimeout(() => {
+      this.reconnectTimers.delete(sessionKey);
+      this.initSession(userId, { isReconnect: true, attempt: attempt + 1 }).catch((error) => {
+        // Retry failed (DB down, version fetch failed, etc.) - keep backing off
+        // instead of stranding the session in 'reconnecting' until manual Start.
+        console.error(`WhatsApp reconnect attempt ${attempt + 1} failed for ${sessionKey}:`, error?.message || error);
+        this.scheduleReconnect(userId, sessionKey, attempt + 1);
+      });
+    }, delay);
+    // Don't keep the node process alive just for a retry timer
+    if (typeof timer.unref === 'function') {
+      timer.unref();
+    }
+    this.reconnectTimers.set(sessionKey, timer);
   }
 
   async initSession(userId, options = {}) {
@@ -142,6 +201,12 @@ class WhatsAppService {
       if (tracked?.socket) {
         const existingRecord = await this.ensureSessionRecord(userId, sessionKey);
         return { sessionKey, session: existingRecord };
+      }
+    } else {
+      // Manual Start/Relink cancels any pending auto-retry so we don't double-init
+      this.clearReconnectTimer(sessionKey);
+      if (options.resetRetries !== false) {
+        this.retryCounts.delete(sessionKey);
       }
     }
 
@@ -163,15 +228,22 @@ class WhatsAppService {
     const existing = this.getTrackedSession(sessionKey);
     if (existing?.socket) {
       try {
-        existing.socket.end(undefined);
+        existing.socket.end();
       } catch (error) {
         // Ignore socket shutdown errors during relink/restart.
       }
+      this.sessions.delete(sessionKey);
     }
 
     const sessionRecord = await this.ensureSessionRecord(userId, sessionKey);
-    const { state, saveCreds, clearSession } = await useDbAuthState(sessionRecord.id);
-    const { version } = await fetchLatestBaileysVersion();
+    const { state, saveCreds } = await useDbAuthState(sessionRecord.id);
+    let version;
+    try {
+      ({ version } = await fetchLatestBaileysVersion());
+    } catch (error) {
+      console.error(`Baileys version fetch failed for ${sessionKey}, retrying init:`, error?.message || error);
+      throw error;
+    }
 
     await this.updateSessionRecord(sessionKey, {
       status: options.isReconnect ? 'reconnecting' : 'initializing',
@@ -186,12 +258,18 @@ class WhatsAppService {
       auth: state,
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
+      browser: ['wazOTP', 'Chrome', '1.0.0'],
+      syncFullHistory: false,
+      markOnlineOnConnect: false,
+      keepAliveIntervalMs: 25000,
+      retryRequestDelayMs: 2000,
     });
 
     this.sessions.set(sessionKey, {
       socket,
       userId,
       sessionKey,
+      lastOpenAt: this.sessions.get(sessionKey)?.lastOpenAt || null,
     });
 
     socket.ev.on('creds.update', saveCreds);
@@ -199,69 +277,85 @@ class WhatsAppService {
     socket.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
-      if (qr) {
-        await this.updateSessionRecord(sessionKey, {
-          status: 'qr_ready',
-          qr_payload: qr,
-          last_qr_at: new Date(),
-          logout_reason: null,
-          is_active: 1,
-        });
-
-        await this.appendSessionEvent(sessionRecord.id, 'session.qr_ready');
-      }
-
-      if (connection === 'open') {
-        const linkedPhone = socket.user?.id ? socket.user.id.split(':')[0] : null;
-        const deviceName = socket.user?.name || null;
-
-        await this.updateSessionRecord(sessionKey, {
-          status: 'connected',
-          phone_number: linkedPhone,
-          device_name: deviceName,
-          qr_payload: null,
-          logout_reason: null,
-          last_connected_at: new Date(),
-          is_active: 1,
-        });
-
-        await this.appendSessionEvent(sessionRecord.id, 'session.connected', {
-          phoneNumber: linkedPhone,
-          deviceName,
-        });
-      }
-
-      if (connection === 'close') {
-        const disconnectMeta = this.normalizeDisconnectReason(lastDisconnect);
-        const loggedOut = disconnectMeta.statusCode === DisconnectReason.loggedOut;
-
-        if (loggedOut) {
-          this.sessions.delete(sessionKey);
-
+      try {
+        if (qr) {
           await this.updateSessionRecord(sessionKey, {
-            status: 'relink_required',
-            qr_payload: null,
-            logout_reason: disconnectMeta.reason,
-            is_active: 0,
+            status: 'qr_ready',
+            qr_payload: qr,
+            last_qr_at: new Date(),
+            logout_reason: null,
+            is_active: 1,
           });
 
-          await this.appendSessionEvent(sessionRecord.id, 'session.logged_out', disconnectMeta);
-          return;
+          await this.appendSessionEvent(sessionRecord.id, 'session.qr_ready');
         }
 
-        this.sessions.delete(sessionKey);
+        if (connection === 'open') {
+          const linkedPhone = socket.user?.id ? socket.user.id.split(':')[0] : null;
+          const deviceName = socket.user?.name || null;
 
-        await this.updateSessionRecord(sessionKey, {
-          status: 'reconnecting',
-          logout_reason: disconnectMeta.reason,
-          is_active: 1,
-        });
+          // Stable connection - stop any retry loop
+          this.resetRetries(sessionKey);
+          const tracked = this.getTrackedSession(sessionKey);
+          if (tracked) {
+            tracked.lastOpenAt = new Date();
+          }
 
-        await this.appendSessionEvent(sessionRecord.id, 'session.closed', disconnectMeta);
+          await this.updateSessionRecord(sessionKey, {
+            status: 'connected',
+            phone_number: linkedPhone,
+            device_name: deviceName,
+            qr_payload: null,
+            logout_reason: null,
+            last_connected_at: new Date(),
+            is_active: 1,
+          });
 
-        setTimeout(() => {
-          this.initSession(userId, { isReconnect: true }).catch(() => {});
-        }, 1500);
+          await this.appendSessionEvent(sessionRecord.id, 'session.connected', {
+            phoneNumber: linkedPhone,
+            deviceName,
+          });
+        }
+
+        if (connection === 'close') {
+          const disconnectMeta = this.normalizeDisconnectReason(lastDisconnect);
+          const attempt = options.attempt ?? this.retryCounts.get(sessionKey) ?? 0;
+
+          this.sessions.delete(sessionKey);
+
+          // Only WhatsApp-side unlink (loggedOut/badSession/forbidden) stops auto-reconnect
+          if (this.isFatalDisconnect(disconnectMeta)) {
+            this.resetRetries(sessionKey);
+
+            await this.updateSessionRecord(sessionKey, {
+              status: 'relink_required',
+              qr_payload: null,
+              logout_reason: disconnectMeta.reason,
+              is_active: 0,
+            });
+
+            await this.appendSessionEvent(sessionRecord.id, 'session.logged_out', disconnectMeta);
+            return;
+          }
+
+          await this.updateSessionRecord(sessionKey, {
+            status: 'reconnecting',
+            logout_reason: disconnectMeta.reason,
+            is_active: 1,
+          });
+
+          await this.appendSessionEvent(sessionRecord.id, 'session.closed', { ...disconnectMeta, attempt });
+
+          // Persistent backoff retry - never strand in 'reconnecting'
+          this.scheduleReconnect(userId, sessionKey, attempt);
+        }
+      } catch (error) {
+        // DB hiccup inside the event handler must not kill the retry loop
+        console.error(`WhatsApp connection.update handler failed for ${sessionKey}:`, error?.message || error);
+        if (update?.connection === 'close') {
+          const attempt = options.attempt ?? this.retryCounts.get(sessionKey) ?? 0;
+          this.scheduleReconnect(userId, sessionKey, attempt);
+        }
       }
     });
 
@@ -275,19 +369,37 @@ class WhatsAppService {
     const sessionKey = this.buildSessionKey(userId);
     const session = await this.ensureSessionRecord(userId, sessionKey);
 
+    // Self-heal: DB says the session should be live but there is no in-memory
+    // socket (server restart, crashed socket, timed-out initializer). Kick a
+    // background reconnect instead of leaving the dashboard stuck until the
+    // user clicks Start Engine.
+    const shouldBeLive = new Set(['connected', 'reconnecting', 'initializing', 'qr_ready']);
+    if (
+      shouldBeLive.has(session.status)
+      && !this.getTrackedSession(sessionKey)
+      && !this.initializers.has(sessionKey)
+      && !this.reconnectTimers.has(sessionKey)
+    ) {
+      const attempt = this.retryCounts.get(sessionKey) ?? 0;
+      this.scheduleReconnect(userId, sessionKey, attempt);
+    }
+
+    const fresh = await this.getSessionRecordByKey(sessionKey);
+    const view = fresh || session;
+
     return {
-      id: session.id,
-      sessionKey: session.session_key,
-      status: session.status,
-      phoneNumber: session.phone_number,
-      deviceName: session.device_name,
-      logoutReason: session.logout_reason,
-      lastConnectedAt: session.last_connected_at,
-      lastQrAt: session.last_qr_at,
-      isActive: Boolean(session.is_active),
-      hasQr: Boolean(session.qr_payload),
-      createdAt: session.created_at,
-      updatedAt: session.updated_at,
+      id: view.id,
+      sessionKey: view.session_key,
+      status: view.status,
+      phoneNumber: view.phone_number,
+      deviceName: view.device_name,
+      logoutReason: view.logout_reason,
+      lastConnectedAt: view.last_connected_at,
+      lastQrAt: view.last_qr_at,
+      isActive: Boolean(view.is_active),
+      hasQr: Boolean(view.qr_payload),
+      createdAt: view.created_at,
+      updatedAt: view.updated_at,
     };
   }
 
@@ -306,9 +418,11 @@ class WhatsAppService {
     const sessionKey = this.buildSessionKey(userId);
     const tracked = this.getTrackedSession(sessionKey);
 
+    this.resetRetries(sessionKey);
+
     if (tracked?.socket) {
       try {
-        tracked.socket.end(undefined);
+        tracked.socket.end();
       } catch (error) {
         // Ignore socket shutdown errors before session reset.
       }
@@ -340,6 +454,32 @@ class WhatsAppService {
 
   async connectSession(userId) {
     return this.initSession(userId, { force: false });
+  }
+
+  async resumeActiveSessions() {
+    let rows = [];
+    try {
+      rows = await db.query(
+        `SELECT user_id, session_key, status FROM whatsapp_sessions WHERE is_active = 1 AND status IN ('connected','reconnecting','initializing','qr_ready')`
+      );
+    } catch (error) {
+      console.error('WhatsApp resume skipped (DB unavailable):', error?.message || error);
+      return { resumed: 0 };
+    }
+
+    let resumed = 0;
+    for (const row of rows) {
+      const sessionKey = row.session_key;
+      if (this.getTrackedSession(sessionKey) || this.initializers.has(sessionKey)) {
+        continue;
+      }
+      this.scheduleReconnect(row.user_id, sessionKey, 0);
+      resumed += 1;
+    }
+    if (resumed > 0) {
+      console.log(`Resuming ${resumed} WhatsApp session(s) after startup`);
+    }
+    return { resumed };
   }
 
   async sendMessage(userId, phone, message, eventName = 'custom_notification') {

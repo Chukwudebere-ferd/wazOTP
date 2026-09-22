@@ -89,6 +89,13 @@ async function initializeDependencies() {
       console.log('Checking Database schema...');
       await db.ensureSchema();
       console.log('Database schema ready');
+
+      try {
+        console.log('Resuming WhatsApp sessions...');
+        await require('./services/whatsapp.service').resumeActiveSessions();
+      } catch (error) {
+        console.error(`WhatsApp resume degraded: ${error.message}`);
+      }
     } catch (error) {
       db.markSchemaUnavailable(error);
       console.error(`Database initialization degraded: ${error.message}`);
