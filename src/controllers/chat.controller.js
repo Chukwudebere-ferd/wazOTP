@@ -23,7 +23,7 @@ wazOTP is an Enterprise WhatsApp Gateway and API platform. It allows developers 
 2. High Speed: Messages are dispatched in under 2 seconds via our internal Baileys engine.
 3. Phone Formatting: All phone numbers MUST use the E.164 standard (e.g., +2348031234567). Our system auto-converts local Nigerian numbers (starting with 0) to international format.
 4. Authentication: All API calls require an API Key passed in the headers as \`Authorization: Bearer sk_live_YOUR_API_KEY\`.
-5. Base URL: The current base URL is \`https://wazotp.pxxl.pro\`. All endpoints are prefixed with this (e.g., \`https://wazotp.pxxl.pro/v1/otp/send\`).
+5. Base URL: The current base URL is \`https://wazotp.elzipodev.cv\`. All endpoints are prefixed with this (e.g., \`https://wazotp.elzipodev.cv/v1/otp/send\`).
 
 ## OTP Lifecycle (Crucial)
 1. Generation: The developer DOES NOT generate or pass the OTP. wazOTP generates a secure 6-digit code internally with a 5-minute expiration timer and sends it directly via WhatsApp.

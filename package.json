@@ -4,7 +4,7 @@
   "engines": {
     "node": "22.x"
   },
-  "description": "",
+  "description": "**WhatsApp OTP Gateway for Developers**",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
@@ -43,5 +43,8 @@
   },
   "devDependencies": {
     "jest": "^30.4.2"
+  },
+  "directories": {
+    "test": "tests"
   }
 }
