@@ -345,6 +345,14 @@ print(response.json())</code></pre>
         <div class="info-box">
           <div class="endpoint-meta">
             <span class="method post">POST</span>
+            <span class="url">/v1/whatsapp/session/pair</span>
+          </div>
+          <div class="doc-list-item">Link with a phone number instead of QR. Send <code>{ "phone": "2348012345678" }</code> to get an 8-character pairing code, then enter it in WhatsApp: Settings → Linked devices → Link a device → Link with phone number instead.</div>
+        </div>
+
+        <div class="info-box">
+          <div class="endpoint-meta">
+            <span class="method post">POST</span>
             <span class="url">/v1/whatsapp/session/relink</span>
           </div>
           <div class="doc-list-item">Forces a session reset and generates a fresh QR code.</div>

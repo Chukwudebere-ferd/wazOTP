@@ -62,6 +62,7 @@ class WhatsAppService {
     const rows = await db.query(
       `
         SELECT id, user_id, session_key, status, phone_number, device_name, qr_payload,
+               pairing_code, pairing_expires_at,
                logout_reason, last_connected_at, last_qr_at, is_active, created_at, updated_at
         FROM whatsapp_sessions
         WHERE session_key = ?
@@ -148,6 +149,23 @@ class WhatsAppService {
     // Explicit logout signals from WhatsApp - never auto-retry these
     const fatalReasons = new Set(['loggedOut', 'badSession', 'forbidden']);
     return fatalReasons.has(meta.reason);
+  }
+
+  normalizeLinkPhone(phone) {
+    if (!phone || typeof phone !== 'string') {
+      throw new Error('Phone number is required (international format, e.g. 2348012345678).');
+    }
+    let digits = phone.replace(/\D/g, '');
+    if (digits.startsWith('0') && digits.length === 11) {
+      digits = `234${digits.substring(1)}`;
+    }
+    if (digits.startsWith('+')) {
+      digits = digits.substring(1);
+    }
+    if (!/^\d{8,15}$/.test(digits)) {
+      throw new Error('Invalid phone number. Use international format without +, e.g. 2348012345678.');
+    }
+    return digits;
   }
 
   getRetryDelay(attempt) {
@@ -272,9 +290,24 @@ class WhatsAppService {
       lastOpenAt: this.sessions.get(sessionKey)?.lastOpenAt || null,
     });
 
-    socket.ev.on('creds.update', saveCreds);
+    socket.ev.on('creds.update', (...args) => {
+      // Ignore credential writes from a superseded socket (see below).
+      if (this.getTrackedSession(sessionKey)?.socket !== socket) {
+        return;
+      }
+      saveCreds(...args);
+    });
 
     socket.ev.on('connection.update', async (update) => {
+      // Stale-socket guard: reinit/relink ends the previous socket, but its
+      // delayed close event can land AFTER the new socket registers. Without
+      // this check it deletes the new tracking, spawns duplicate sockets on
+      // the same identity, and WhatsApp kills the session (401) — which also
+      // wipes pairing codes and looks like random disconnects.
+      if (this.getTrackedSession(sessionKey)?.socket !== socket) {
+        return;
+      }
+
       const { connection, lastDisconnect, qr } = update;
 
       try {
@@ -306,6 +339,8 @@ class WhatsAppService {
             phone_number: linkedPhone,
             device_name: deviceName,
             qr_payload: null,
+            pairing_code: null,
+            pairing_expires_at: null,
             logout_reason: null,
             last_connected_at: new Date(),
             is_active: 1,
@@ -330,6 +365,8 @@ class WhatsAppService {
             await this.updateSessionRecord(sessionKey, {
               status: 'relink_required',
               qr_payload: null,
+              pairing_code: null,
+              pairing_expires_at: null,
               logout_reason: disconnectMeta.reason,
               is_active: 0,
             });
@@ -373,7 +410,7 @@ class WhatsAppService {
     // socket (server restart, crashed socket, timed-out initializer). Kick a
     // background reconnect instead of leaving the dashboard stuck until the
     // user clicks Start Engine.
-    const shouldBeLive = new Set(['connected', 'reconnecting', 'initializing', 'qr_ready']);
+    const shouldBeLive = new Set(['connected', 'reconnecting', 'initializing', 'qr_ready', 'pairing_ready']);
     if (
       shouldBeLive.has(session.status)
       && !this.getTrackedSession(sessionKey)
@@ -386,6 +423,9 @@ class WhatsAppService {
 
     const fresh = await this.getSessionRecordByKey(sessionKey);
     const view = fresh || session;
+    const pairingExpiresAt = view.pairing_expires_at || null;
+    const hasPairing = Boolean(view.pairing_code)
+      && (!pairingExpiresAt || new Date(pairingExpiresAt).getTime() > Date.now());
 
     return {
       id: view.id,
@@ -398,6 +438,9 @@ class WhatsAppService {
       lastQrAt: view.last_qr_at,
       isActive: Boolean(view.is_active),
       hasQr: Boolean(view.qr_payload),
+      pairingCode: hasPairing ? view.pairing_code : null,
+      pairingExpiresAt,
+      hasPairing,
       createdAt: view.created_at,
       updatedAt: view.updated_at,
     };
@@ -438,6 +481,8 @@ class WhatsAppService {
     await this.updateSessionRecord(sessionKey, {
       status: 'initializing',
       qr_payload: null,
+      pairing_code: null,
+      pairing_expires_at: null,
       logout_reason: null,
       phone_number: null,
       device_name: null,
@@ -456,11 +501,138 @@ class WhatsAppService {
     return this.initSession(userId, { force: false });
   }
 
+  /**
+   * Phone-number linking (Baileys pairing code). Does NOT touch the QR flow.
+   * - Ensures a live socket (reuses tracked socket, else initializes one)
+   * - Throws a friendly error if already connected or provider rejects
+   */
+  async requestPairingCode(userId, phone) {
+    const digits = this.normalizeLinkPhone(phone);
+    const sessionKey = this.buildSessionKey(userId);
+
+    const current = await this.ensureSessionRecord(userId, sessionKey);
+
+    // WhatsApp binds pairing keys to the stored identity. If the DB holds
+    // credentials registered for a DIFFERENT number (e.g. an old QR link),
+    // the server rejects pairing for the new number with a number error.
+    // Detect that up front and start fresh instead of surfacing the cryptic
+    // provider rejection. A live connected session is never touched.
+    const { state: storedState, clearSession } = await useDbAuthState(current.id);
+    const registeredNumber = storedState.creds?.registered
+      ? String(storedState.creds.me?.id || '').split(':')[0].split('@')[0] || null
+      : null;
+    const liveConnected = current.status === 'connected' && this.getTrackedSession(sessionKey)?.socket;
+
+    if (liveConnected) {
+      throw new Error('WhatsApp is already connected. Relink first to pair a different number.');
+    }
+
+    if (registeredNumber && registeredNumber !== digits) {
+      try {
+        this.getTrackedSession(sessionKey)?.socket?.end();
+      } catch (error) {
+        // Ignore socket shutdown errors before identity reset.
+      }
+      this.sessions.delete(sessionKey);
+      this.resetRetries(sessionKey);
+      await clearSession();
+      await this.updateSessionRecord(sessionKey, {
+        status: 'initializing',
+        qr_payload: null,
+        pairing_code: null,
+        pairing_expires_at: null,
+        logout_reason: null,
+        phone_number: null,
+        device_name: null,
+        is_active: 1,
+      });
+      await this.appendSessionEvent(current.id, 'session.pairing_identity_reset', {
+        previousNumber: registeredNumber,
+        phoneNumber: digits,
+      });
+    }
+
+    let tracked = this.getTrackedSession(sessionKey);
+    if (!tracked?.socket) {
+      await this.initSession(userId, { force: false });
+      tracked = this.getTrackedSession(sessionKey);
+    }
+
+    if (!tracked?.socket?.requestPairingCode) {
+      throw new Error('WhatsApp session is starting. Wait a few seconds and try again.');
+    }
+
+    // The pairing IQ must go out over an OPEN websocket. initSession returns
+    // right after socket creation while the handshake is still in flight, so
+    // wait for it (bounded) instead of failing on a half-open socket.
+    try {
+      let timeout;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('open-timeout')), 20000);
+        if (typeof timeout.unref === 'function') {
+          timeout.unref();
+        }
+      });
+      await Promise.race([tracked.socket.waitForSocketOpen(), timeoutPromise]).finally(() => {
+        clearTimeout(timeout);
+      });
+    } catch (error) {
+      throw new Error('WhatsApp connection is not ready yet. Wait a few seconds and tap Get code again.');
+    }
+
+    let code;
+    try {
+      code = await tracked.socket.requestPairingCode(digits);
+    } catch (error) {
+      const raw = error?.message || error?.output?.message || 'provider error';
+      try {
+        await this.appendSessionEvent(current.id, 'session.pairing_failed', {
+          phoneNumber: digits,
+          error: String(raw).slice(0, 500),
+        });
+      } catch (eventError) {
+        // Logging must never break the error response.
+      }
+      const message = String(raw);
+      if (/already registered|authenticated|logged/i.test(message)) {
+        throw new Error('This session is already linked. Relink first to pair a different number.');
+      }
+      throw new Error(`Pairing rejected by WhatsApp: ${message}`);
+    }
+
+    if (!code) {
+      throw new Error('Pairing rejected by WhatsApp: empty code from provider.');
+    }
+
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const record = await this.getSessionRecordByKey(sessionKey);
+
+    await this.updateSessionRecord(sessionKey, {
+      status: 'pairing_ready',
+      pairing_code: code,
+      pairing_expires_at: expiresAt,
+      phone_number: digits,
+      logout_reason: null,
+      is_active: 1,
+    });
+
+    if (record) {
+      await this.appendSessionEvent(record.id, 'session.pairing_requested', { phoneNumber: digits });
+    }
+
+    return {
+      sessionKey,
+      pairingCode: code,
+      phoneNumber: digits,
+      expiresAt,
+    };
+  }
+
   async resumeActiveSessions() {
     let rows = [];
     try {
       rows = await db.query(
-        `SELECT user_id, session_key, status FROM whatsapp_sessions WHERE is_active = 1 AND status IN ('connected','reconnecting','initializing','qr_ready')`
+        `SELECT user_id, session_key, status FROM whatsapp_sessions WHERE is_active = 1 AND status IN ('connected','reconnecting','initializing','qr_ready','pairing_ready')`
       );
     } catch (error) {
       console.error('WhatsApp resume skipped (DB unavailable):', error?.message || error);

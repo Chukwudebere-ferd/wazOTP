@@ -97,10 +97,12 @@ async function ensureSchema() {
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT UNSIGNED NOT NULL,
         session_key VARCHAR(191) NOT NULL,
-        status ENUM('idle', 'initializing', 'qr_ready', 'connected', 'reconnecting', 'relink_required', 'failed') NOT NULL DEFAULT 'idle',
+        status ENUM('idle', 'initializing', 'qr_ready', 'pairing_ready', 'connected', 'reconnecting', 'relink_required', 'failed') NOT NULL DEFAULT 'idle',
         phone_number VARCHAR(32) NULL,
         device_name VARCHAR(191) NULL,
         qr_payload LONGTEXT NULL,
+        pairing_code VARCHAR(16) NULL,
+        pairing_expires_at TIMESTAMP NULL DEFAULT NULL,
         logout_reason VARCHAR(191) NULL,
         last_connected_at TIMESTAMP NULL DEFAULT NULL,
         last_qr_at TIMESTAMP NULL DEFAULT NULL,
@@ -115,6 +117,35 @@ async function ensureSchema() {
           ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Safe migration for existing installs (no rebuild, no data loss)
+    const [pairingCol] = await connection.query(
+      "SHOW COLUMNS FROM whatsapp_sessions LIKE 'pairing_code'",
+    );
+    if (pairingCol.length === 0) {
+      await connection.query(
+        'ALTER TABLE whatsapp_sessions ADD COLUMN pairing_code VARCHAR(16) NULL AFTER qr_payload',
+      );
+    }
+
+    const [pairingExpCol] = await connection.query(
+      "SHOW COLUMNS FROM whatsapp_sessions LIKE 'pairing_expires_at'",
+    );
+    if (pairingExpCol.length === 0) {
+      await connection.query(
+        'ALTER TABLE whatsapp_sessions ADD COLUMN pairing_expires_at TIMESTAMP NULL DEFAULT NULL AFTER pairing_code',
+      );
+    }
+
+    const [statusCol] = await connection.query(
+      "SHOW COLUMNS FROM whatsapp_sessions LIKE 'status'",
+    );
+    const statusType = statusCol[0]?.Type || '';
+    if (!statusType.includes('pairing_ready')) {
+      await connection.query(
+        `ALTER TABLE whatsapp_sessions MODIFY COLUMN status ENUM('idle', 'initializing', 'qr_ready', 'pairing_ready', 'connected', 'reconnecting', 'relink_required', 'failed') NOT NULL DEFAULT 'idle'`,
+      );
+    }
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS whatsapp_session_events (

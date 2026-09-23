@@ -57,6 +57,17 @@ const elements = {
   backToSignInFromReset: document.getElementById("backToSignInFromReset"),
   resetSuccessPanel: document.getElementById("resetSuccessPanel"),
   resetSentEmail: document.getElementById("resetSentEmail"),
+  linkTabQr: document.getElementById("linkTabQr"),
+  linkTabPair: document.getElementById("linkTabPair"),
+  qrMethodPane: document.getElementById("qrMethodPane"),
+  pairMethodPane: document.getElementById("pairMethodPane"),
+  pairForm: document.getElementById("pairForm"),
+  pairPhoneInput: document.getElementById("pairPhoneInput"),
+  pairCodeButton: document.getElementById("pairCodeButton"),
+  pairCodeBlock: document.getElementById("pairCodeBlock"),
+  pairCodeValue: document.getElementById("pairCodeValue"),
+  pairCopyButton: document.getElementById("pairCopyButton"),
+  pairExpiryHint: document.getElementById("pairExpiryHint"),
 };
 
 function setHeroStatus(message) {
@@ -72,6 +83,7 @@ function setBusy(busy, targetButton = null) {
     elements.logoutButton,
     elements.connectButton,
     elements.relinkButton,
+    elements.pairCodeButton,
   ].forEach((button) => {
     if (button) button.disabled = busy;
   });
@@ -159,6 +171,27 @@ function formatDate(value) {
   }
 
   return parsed.toLocaleString();
+}
+
+// Latch the pairing code client-side so a single poll gap or status flap
+// can never blank it mid-entry. Cleared on terminal states, expiry, relink.
+const pairLatch = { code: null, expiresAt: null };
+const PAIR_TERMINAL_STATES = new Set(['connected', 'relink_required', 'failed']);
+
+function clearPairLatch() {
+  pairLatch.code = null;
+  pairLatch.expiresAt = null;
+}
+
+function latchedPairingValid(status) {
+  if (!pairLatch.code || PAIR_TERMINAL_STATES.has(status)) {
+    return false;
+  }
+  if (!pairLatch.expiresAt) {
+    return true;
+  }
+  const expiry = new Date(pairLatch.expiresAt).getTime();
+  return !Number.isNaN(expiry) && expiry > Date.now();
 }
 
 function showAuthPanel() {
@@ -272,10 +305,39 @@ function applySessionStatus(session) {
   elements.qrValue.textContent = formatDate(session.lastQrAt);
   elements.logoutReasonValue.textContent = session.logoutReason || "-";
 
-  const waitingForQr = session.status === "qr_ready" || session.status === "initializing" || session.status === "reconnecting";
-  elements.qrHint.textContent = waitingForQr
-    ? "Scan the QR in WhatsApp Linked Devices. If the code changes, this page will pull the latest one."
-    : "The page keeps polling session state. If WhatsApp logs out, use relink to generate a fresh scan.";
+  const waitingForQr = session.status === "qr_ready" || session.status === "pairing_ready" || session.status === "initializing" || session.status === "reconnecting";
+
+  if (session.pairingCode && elements.pairCodeValue) {
+    pairLatch.code = session.pairingCode;
+    pairLatch.expiresAt = session.pairingExpiresAt || null;
+  }
+
+  const showPairCode = Boolean(elements.pairCodeValue)
+    && (Boolean(session.pairingCode) || latchedPairingValid(session.status));
+
+  if (showPairCode) {
+    elements.pairCodeBlock?.classList.remove("hidden");
+    elements.pairCodeValue.textContent = session.pairingCode || pairLatch.code;
+    if (elements.pairExpiryHint) {
+      const expiry = session.pairingExpiresAt || pairLatch.expiresAt;
+      elements.pairExpiryHint.textContent = expiry
+        ? `Code expires ${formatDate(expiry)}. Request a new one if it stops working.`
+        : "";
+    }
+  } else {
+    elements.pairCodeBlock?.classList.add("hidden");
+    if (!session.pairingCode) {
+      clearPairLatch();
+    }
+  }
+
+  if (session.status === "pairing_ready") {
+    elements.qrHint.textContent = "Enter the pairing code in WhatsApp: Settings → Linked devices → Link with phone number.";
+  } else {
+    elements.qrHint.textContent = waitingForQr
+      ? "Scan the QR in WhatsApp Linked Devices. If the code changes, this page will pull the latest one."
+      : "The page keeps polling session state. If WhatsApp logs out, use relink to generate a fresh scan.";
+  }
 }
 
 async function refreshSessionStatus() {
@@ -625,6 +687,7 @@ function bindEvents() {
 
   elements.relinkButton.addEventListener("click", async () => {
     setBusy(true, elements.relinkButton);
+    clearPairLatch();
 
     try {
       await authedFetch("/v1/whatsapp/session/relink", { method: "POST" });
@@ -633,6 +696,73 @@ function bindEvents() {
       showToast(error.message);
     } finally {
       setBusy(false, elements.relinkButton);
+    }
+  });
+
+  function selectLinkTab(which) {
+    const isPair = which === "pair";
+    elements.linkTabQr?.classList.toggle("active", !isPair);
+    elements.linkTabPair?.classList.toggle("active", isPair);
+    elements.linkTabQr?.setAttribute("aria-selected", String(!isPair));
+    elements.linkTabPair?.setAttribute("aria-selected", String(isPair));
+    elements.qrMethodPane?.classList.toggle("hidden", isPair);
+    elements.pairMethodPane?.classList.toggle("hidden", !isPair);
+    if (isPair) {
+      elements.qrMethodPane?.style.setProperty("display", "none");
+      elements.pairMethodPane?.style.removeProperty("display");
+      elements.pairPhoneInput?.focus();
+    } else {
+      elements.pairMethodPane?.classList.add("hidden");
+      elements.qrMethodPane?.classList.remove("hidden");
+      elements.qrMethodPane?.style.setProperty("display", "flex");
+    }
+  }
+
+  elements.linkTabQr?.addEventListener("click", () => selectLinkTab("qr"));
+  elements.linkTabPair?.addEventListener("click", () => selectLinkTab("pair"));
+
+  elements.pairForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const phone = elements.pairPhoneInput?.value.trim();
+    if (!phone) {
+      showToast("Enter your WhatsApp number first.");
+      return;
+    }
+    setBusy(true, elements.pairCodeButton);
+    try {
+      const payload = await authedFetch("/v1/whatsapp/session/pair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      if (payload.data?.pairingCode && elements.pairCodeValue) {
+        pairLatch.code = payload.data.pairingCode;
+        pairLatch.expiresAt = payload.data.expiresAt || null;
+        elements.pairCodeBlock?.classList.remove("hidden");
+        elements.pairCodeValue.textContent = payload.data.pairingCode;
+        if (elements.pairExpiryHint) {
+          elements.pairExpiryHint.textContent = payload.data.expiresAt
+            ? `Code expires ${formatDate(payload.data.expiresAt)}. Request a new one if it stops working.`
+            : "";
+        }
+        showToast("Pairing code ready — enter it in WhatsApp.", "success");
+      }
+      await refreshSessionStatus();
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setBusy(false, elements.pairCodeButton);
+    }
+  });
+
+  elements.pairCopyButton?.addEventListener("click", async () => {
+    const code = elements.pairCodeValue?.textContent?.trim();
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      showToast("Pairing code copied", "success");
+    } catch {
+      showToast("Failed to copy pairing code");
     }
   });
 

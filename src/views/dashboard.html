@@ -267,14 +267,49 @@
           </div>
 
           <div class="glass-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-            <h3 style="margin-bottom: 8px;">WhatsApp Scan</h3>
-            <p class="hint" style="text-align: center; margin-bottom: 24px;">Scan this QR in your WhatsApp app to link this instance.</p>
-            
-            <div class="qr-frame" id="qrFrame" style="width: 100%; border-style: solid; background: rgba(0,0,0,0.2);">
-              <div class="qr-placeholder" id="qrPlaceholder" role="status">
-                Engine is idle. Click <strong>Start Engine</strong> to generate a QR code.
+            <h3 style="margin-bottom: 8px;">Link WhatsApp</h3>
+            <p class="hint" style="text-align: center; margin-bottom: 16px;">Choose how to link this instance to your WhatsApp app.</p>
+
+            <div class="link-tabs" role="tablist" aria-label="Linking method">
+              <button type="button" id="linkTabQr" class="link-tab active" role="tab" aria-selected="true" aria-controls="qrMethodPane">Scan QR</button>
+              <button type="button" id="linkTabPair" class="link-tab" role="tab" aria-selected="false" aria-controls="pairMethodPane">Phone number</button>
+            </div>
+
+            <div id="qrMethodPane" role="tabpanel" aria-labelledby="linkTabQr" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+              <div class="qr-frame" id="qrFrame" style="width: 100%; border-style: solid; background: rgba(0,0,0,0.2);">
+                <div class="qr-placeholder" id="qrPlaceholder" role="status">
+                  Engine is idle. Click <strong>Start Engine</strong> to generate a QR code.
+                </div>
+                <canvas id="qrCanvas" class="hidden" role="img" aria-label="WhatsApp link QR code"></canvas>
               </div>
-              <canvas id="qrCanvas" class="hidden" role="img" aria-label="WhatsApp link QR code"></canvas>
+            </div>
+
+            <div id="pairMethodPane" role="tabpanel" aria-labelledby="linkTabPair" class="hidden" style="width: 100%;">
+              <form id="pairForm" class="stack" style="width: 100%;">
+                <label for="pairPhoneInput">
+                  WhatsApp number
+                  <input id="pairPhoneInput" type="tel" inputmode="tel" autocomplete="tel"
+                    placeholder="2348012345678" aria-describedby="pairPhoneHelp" />
+                </label>
+                <p class="hint" id="pairPhoneHelp" style="margin-top: -8px;">International format, digits only — no +. Nigerian 080... numbers convert automatically.</p>
+                <button type="submit" id="pairCodeButton" class="button primary" style="width: 100%;">Get pairing code</button>
+              </form>
+
+              <div id="pairCodeBlock" class="hidden" style="width: 100%; margin-top: 16px; text-align: center;">
+                <div class="stat-label">Enter this code in WhatsApp</div>
+                <div class="pair-code-row">
+                  <div class="code pair-code" id="pairCodeValue" tabindex="0" aria-label="Pairing code">--------</div>
+                  <button type="button" id="pairCopyButton" class="icon-button" aria-label="Copy pairing code">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  </button>
+                </div>
+                <div class="hint" id="pairExpiryHint" role="status" style="margin-top: 8px;"></div>
+                <ol class="pair-steps">
+                  <li>Open WhatsApp on your phone</li>
+                  <li>Settings → Linked devices → Link a device</li>
+                  <li>Tap <strong>Link with phone number instead</strong> and enter the code</li>
+                </ol>
+              </div>
             </div>
 
             <div id="qrHint" class="hint" style="margin-top: 16px; text-align: center;">
