@@ -159,6 +159,10 @@ class WhatsAppService {
     if (digits.startsWith('0') && digits.length === 11) {
       digits = `234${digits.substring(1)}`;
     }
+    // Common typo: country code + local format, e.g. 23408031234567
+    if (digits.startsWith('234') && digits.length === 14 && digits[3] === '0') {
+      digits = `234${digits.substring(4)}`;
+    }
     if (digits.startsWith('+')) {
       digits = digits.substring(1);
     }
@@ -527,7 +531,15 @@ class WhatsAppService {
       throw new Error('WhatsApp is already connected. Relink first to pair a different number.');
     }
 
-    if (registeredNumber && registeredNumber !== digits) {
+    // Per Baileys docs: never request a code on registered creds. A second
+    // code on an already-linked identity makes the phone reject it with a
+    // "number is wrong" error, so refuse while a link is live/recovering.
+    const LINK_DEAD_STATES = new Set(['relink_required', 'failed', 'idle']);
+    if (registeredNumber && registeredNumber === digits && !LINK_DEAD_STATES.has(current.status)) {
+      throw new Error('This number is already linked. Wait for the connection, or click Relink for a fresh start.');
+    }
+
+    if (registeredNumber && (registeredNumber !== digits || LINK_DEAD_STATES.has(current.status))) {
       try {
         this.getTrackedSession(sessionKey)?.socket?.end();
       } catch (error) {
@@ -578,6 +590,20 @@ class WhatsAppService {
       });
     } catch (error) {
       throw new Error('WhatsApp connection is not ready yet. Wait a few seconds and tap Get code again.');
+    }
+
+    // Fail fast on typos/dead numbers before issuing a code the phone will
+    // refuse with "number is wrong". Lookup failure is non-fatal — proceed
+    // and let the server/phone validate.
+    try {
+      const [lookup] = await tracked.socket.onWhatsApp(digits);
+      if (lookup && lookup.exists === false) {
+        throw new Error('This number is not registered on WhatsApp. Check the digits and country code.');
+      }
+    } catch (error) {
+      if (error.message.includes('not registered on WhatsApp')) {
+        throw error;
+      }
     }
 
     let code;

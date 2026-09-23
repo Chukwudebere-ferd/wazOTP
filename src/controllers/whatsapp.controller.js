@@ -111,7 +111,7 @@ class WhatsAppController {
         });
       }
 
-      const clientErrors = ['required', 'Invalid phone', 'already connected', 'already linked', 'starting', 'Pairing rejected', 'not ready yet', 'Get code again'];
+      const clientErrors = ['required', 'Invalid phone', 'already connected', 'already linked', 'starting', 'Pairing rejected', 'not ready yet', 'Get code again', 'Relink', 'not registered on WhatsApp', 'fresh start'];
       if (clientErrors.some((fragment) => error.message.includes(fragment))) {
         return reply.status(400).send({
           success: false,
