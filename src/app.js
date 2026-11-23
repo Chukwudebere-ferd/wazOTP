@@ -110,7 +110,9 @@ async function initializeDependencies() {
 async function prepareApp() {
   const app = getApp();
   await app.ready();
-  void initializeDependencies();
+  // Must be awaited: on serverless the instance freezes once the response is
+  // sent, so a detached init never finishes and schema/health stay unset.
+  await initializeDependencies();
   return app;
 }
 
