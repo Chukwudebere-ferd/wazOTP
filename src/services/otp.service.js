@@ -147,8 +147,9 @@ class OTPService {
     const offset = (page - 1) * limit;
 
     const rows = await db.query(
-      `SELECT ${selectClause} FROM otps o WHERE ${whereClause} ORDER BY o.${sortBy} ${sortOrder} LIMIT ? OFFSET ?`,
-      [...params, limit, offset],
+      // Values are clamped integers; TiDB rejects DOUBLE-bound LIMIT params.
+      `SELECT ${selectClause} FROM otps o WHERE ${whereClause} ORDER BY o.${sortBy} ${sortOrder} LIMIT ${limit} OFFSET ${offset}`,
+      params,
     );
 
     return {
